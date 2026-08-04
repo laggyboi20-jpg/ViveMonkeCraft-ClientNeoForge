@@ -1,10 +1,16 @@
-# ViveMonkeCraft
+# ViveMonkeCraft (NeoForge)
 
-**Gorilla Tag style VR locomotion for Minecraft 1.21.5.** Grab the world with your
+**Gorilla Tag style VR locomotion for Minecraft 26.2.** Grab the world with your
 hands and swing, climb, and fling yourself through it. No joystick required.
 
-Built for **QuestCraft / Vivecraft 1.2.x**. Client-side for singleplayer & LAN; an
-optional server companion unlocks it (and lets admins cap it) on dedicated servers.
+> This is the **NeoForge** build for **Minecraft 26.2**.
+> Other loaders and Minecraft versions live on their own branches and repos:
+> [Fabric](https://github.com/laggyboi20-jpg/ViveMonkeCraft-ClientFabric) ·
+> [NeoForge](https://github.com/laggyboi20-jpg/ViveMonkeCraft-ClientNeoForge) ·
+> [Forge](https://github.com/laggyboi20-jpg/ViveMonkeCraft-ClientForge)
+
+Client-side for singleplayer & LAN; an optional server companion unlocks it (and lets
+admins cap it) on dedicated servers.
 
 ---
 
@@ -12,20 +18,31 @@ optional server companion unlocks it (and lets admins cap it) on dedicated serve
 
 | | |
 |---|---|
-| Minecraft | 1.21.7 |
-| Loader | Fabric Loader 0.19.3+ |
-| API | Fabric API |
-| VR | QuestCraft / Vivecraft 1.2.x |
-| Optional | Mod Menu + Cloth Config (in-game settings screen) |
-| Optional | **ViveMonke server mod** (`monke-server`) only for **dedicated** servers |
+| Minecraft | 26.2 |
+| Loader | NeoForge 26.2.0.43-beta+ |
+| VR | Vivecraft (PCVR) for this Minecraft version — desktop Java only |
+| Optional | Cloth Config (26.2.155, NeoForge flavour) — enables the in-game settings screen |
+| Optional | **ViveMonke server mod** — only for **dedicated** servers |
 
-The mod is `environment: client`. It does nothing without Vivecraft/QuestCraft active except show you're friends without legs.
+The mod is client-only (`Dist.CLIENT`). It does nothing without Vivecraft active
+except render other players without legs. Vivecraft itself is **not** bundled — it is
+reached at runtime by reflection, so the mod loads fine with or without it.
 
 ---
 
-#  Server Control 
+## Configuring
 
-#### The companion server mod lets admins fully **disable** the mod, set **hard speed caps** (enforced server-side), choose which **op level** bypasses limits, and **raise the allowed limits** for everyone (push strength, reach, gravity, etc.). Players without cheats/operator access are otherwise clamped to safe defaults, so editing the config can't gain an unfair edge.
+Configure it three ways: the **Config** button next to ViveMonkeCraft in the **Mods** list opens the Cloth Config screen (needs Cloth Config installed); the **`/vmc`** client command (`/vmc`, `/vmc reload`, `/vmc set <setting> <value>`); or by editing **`config/vivemonkecraft.properties`** directly.
+
+---
+
+## Server Control
+
+The companion server mod lets admins fully **disable** the mod, set **hard speed caps**
+(enforced server-side), choose which **op level** bypasses limits, and **raise the allowed
+limits** for everyone (push strength, reach, gravity, etc.). Players without cheats /
+operator access are otherwise clamped to safe defaults, so editing the client config can't
+gain an unfair edge.
 
 ---
 
@@ -59,7 +76,7 @@ The mod is `environment: client`. It does nothing without Vivecraft/QuestCraft a
 
 - Ice is slippery on **every** face: push off ice walls for momentum, but you can't
   cling or climb them.
-- Tunable ice speed multiplier kept low for Quest performance.
+- Tunable ice speed multiplier kept conservative.
 - **Experimental:** make ice *floors* behave like ice *walls* (pure push-off, no glue).
 
 ---
@@ -96,7 +113,7 @@ The mod is `environment: client`. It does nothing without Vivecraft/QuestCraft a
 - **Auto-enable on join**, with a short grace window so server rules apply first.
 - **GUI guard**: opening any screen (inventory, chat, settings…) fully suspends
   locomotion so you never drift while in a menu.
-- **Robust teleport handling**: QuestCraft teleports and dimension changes no longer
+- **Robust teleport handling**: server teleports and dimension changes no longer
   leave you stuck, sliding, or wrong-sized.
 - **Barrier blocks are ignored**: admins can fence off areas the mod can't bypass.
 
@@ -118,7 +135,7 @@ texts are in the [`third party license/`](third%20party%20license) folder.
 | Claude Code | |
 
 **Vivecraft** is **LGPLv3** and is accessed at runtime via reflection only. It is
-**not bundled or modified** by this mod; players supply their own Vivecraft/QuestCraft.
+**not bundled or modified** by this mod; players supply their own Vivecraft.
 
 *Not affiliated with Another Axiom or Gorilla Tag. "Gorilla Tag" is referenced only to
 describe the movement style.*
