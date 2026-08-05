@@ -17,3 +17,6 @@ Thumbs.db
 *.class
 *.jar
 *.war   
+
+# Gradle wrapper jar must be committed so ./gradlew works on a fresh clone
+!gradle/wrapper/gradle-wrapper.jar
