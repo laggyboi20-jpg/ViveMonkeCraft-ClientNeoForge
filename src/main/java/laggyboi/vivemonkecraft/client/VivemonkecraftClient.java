@@ -369,7 +369,7 @@ public class VivemonkecraftClient {
                     client.player.displayClientMessage(Component.literal(
                         "§e[ViveMonkeCraft] §cThis server doesn't run the monke-server "
                         + "companion mod, so gorilla locomotion is disabled here. "
-                        + "§7(Server admins: install the ViveMonke server mod to allow it.)"),
+                        + "§7(Server admins: install the ViveMonke server mod to allow it. Download: github.com/laggyboi20-jpg/ViveMonkeCraft-Server)"),
                         false);
                 }
             }
