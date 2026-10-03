@@ -22,7 +22,7 @@ admins cap it) on dedicated servers.
 | Loader | NeoForge 21.11.45+ |
 | VR | Vivecraft (PCVR) for this Minecraft version — desktop Java only |
 | Optional | Cloth Config (17.0.144, NeoForge flavour) — enables the in-game settings screen |
-| Optional | **ViveMonke server mod** — only for **dedicated** servers |
+| Optional | [**ViveMonke server mod**](https://github.com/laggyboi20-jpg/ViveMonkeCraft-Server) — only for **dedicated** servers |
 
 The mod is client-only (`Dist.CLIENT`). It does nothing without Vivecraft active
 except render other players without legs. Vivecraft itself is **not** bundled — it is
@@ -33,6 +33,14 @@ reached at runtime by reflection, so the mod loads fine with or without it.
 ## Configuring
 
 Configure it three ways: the **Config** button next to ViveMonkeCraft in the **Mods** list opens the Cloth Config screen (needs Cloth Config installed); the **`/vmc`** client command (`/vmc`, `/vmc reload`, `/vmc set <setting> <value>`); or by editing **`config/vivemonkecraft.properties`** directly.
+
+---
+
+## Multiplayer / server mod
+
+On a **dedicated** server ViveMonkeCraft stays **off** until the server runs the companion mod [ViveMonkeCraft-Server](https://github.com/laggyboi20-jpg/ViveMonkeCraft-Server). This is intentional (server-side opt-in); the server mod also lets admins cap or disable it. Singleplayer and LAN worlds need nothing.
+
+- The server mod is currently **Fabric-only**. There is no NeoForge server build yet, so on dedicated servers this NeoForge build stays disabled. [Server releases](https://github.com/laggyboi20-jpg/ViveMonkeCraft-Server/releases).
 
 ---
 
