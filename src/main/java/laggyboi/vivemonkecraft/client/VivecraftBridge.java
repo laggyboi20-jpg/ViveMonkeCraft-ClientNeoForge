@@ -122,6 +122,65 @@ public final class VivecraftBridge {
     }
 
     // -----------------------------------------------------------------------
+    // Controller orientation (hoverboard tilt). Wired separately from the core
+    // position API, like teleport-aim below, so a missing method can only
+    // disable the hoverboard — never locomotion.
+    // -----------------------------------------------------------------------
+
+    private boolean axisTried  = false;
+    private boolean axisBroken = false;
+    private Method  mPubGetRotation;       // VRBodyPartData#getRotation() → Quaternionfc (1.3.x)
+    private Method  mGetCustomVector;      // VRDevicePose#getCustomVector(Vector3fc) → Vector3f (1.2.x)
+
+    /**
+     * The given controller-local axis expressed in world space, for the main
+     * ({@code main=true}) or off-hand controller. Null if VR/Vivecraft can't
+     * provide it. Vivecraft's controller frame: +Y up out of the controller's
+     * top, -Z along its pointing direction.
+     */
+    public Vec3 getHandAxis(boolean main, double x, double y, double z) {
+        Link l = tryWire();
+        if (axisBroken || (l != Link.PUBLIC && l != Link.LEGACY)) return null;
+        try {
+            if (!axisTried) {
+                axisTried = true;
+                if (l == Link.PUBLIC) {
+                    mPubGetRotation = Class.forName("org.vivecraft.api.data.VRBodyPartData")
+                            .getMethod("getRotation");
+                } else {
+                    mGetCustomVector = Class.forName("org.vivecraft.client_vr.VRData$VRDevicePose")
+                            .getMethod("getCustomVector", org.joml.Vector3fc.class);
+                }
+            }
+            org.joml.Vector3f axis = new org.joml.Vector3f((float) x, (float) y, (float) z);
+            Object v;
+            if (l == Link.PUBLIC) {
+                Object pose = mPubGetPose.invoke(pubApi);
+                if (pose == null) return null;
+                Object part = (main ? mPubGetMain : mPubGetOff).invoke(pose);
+                if (part == null) return null;
+                Object rot = mPubGetRotation.invoke(part);
+                if (!(rot instanceof org.joml.Quaternionfc q)) return null;
+                v = q.transform(axis);
+            } else {
+                Object vrPlayer = mVrPlayerGet.invoke(null);
+                if (vrPlayer == null) return null;
+                Object vrData = fVrDataRender.get(vrPlayer);
+                if (vrData == null) return null;
+                Object devicePose = (main ? fC0 : fC1).get(vrData);
+                if (devicePose == null) return null;
+                v = mGetCustomVector.invoke(devicePose, axis);
+            }
+            if (!(v instanceof org.joml.Vector3fc r)) return null;
+            return new Vec3(r.x(), r.y(), r.z());
+        } catch (ReflectiveOperationException | LinkageError e) {
+            axisBroken = true;
+            System.out.println("[ViveMonkeCraft] Controller orientation unavailable, hoverboard disabled: " + e);
+            return null;
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Teleport-aim detection — wired separately; a failure here never disables
     // the core position API above.
     // -----------------------------------------------------------------------

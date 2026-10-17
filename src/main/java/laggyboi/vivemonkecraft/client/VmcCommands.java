@@ -1,5 +1,6 @@
 package laggyboi.vivemonkecraft.client;
 
+import laggyboi.vivemonkecraft.client.compat.VmcCompat;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -53,7 +54,7 @@ public final class VmcCommands {
                             String value  = StringArgumentType.getString(ctx, "value");
                             String result = MovementConfig.setByName(name, value);
                             if (mc.player != null) {
-                                mc.gui.hud.setOverlayMessage(Component.literal(
+                                VmcCompat.overlay(mc, Component.literal(
                                     result != null
                                         ? "§e[ViveMonkeCraft] §f" + result
                                         : "§c[ViveMonkeCraft] §fUnknown setting or bad value: "
@@ -69,10 +70,9 @@ public final class VmcCommands {
                         // Op-lock: requires permission level 2 (operator).
                         // In singleplayer the host is always level 4, so this always works.
                         // On a server it reflects what the server reported to the client.
-                        if (mc.player == null || !mc.player.permissions().hasPermission(
-                                net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER)) {
+                        if (mc.player == null || !VmcCompat.isOperator(mc.player)) {
                             if (mc.player != null) {
-                                mc.gui.hud.setOverlayMessage(
+                                VmcCompat.overlay(mc,
                                     Component.literal("§c[ViveMonkeCraft] §fNeed operator access to change gravity"),
                                     false);
                             }
@@ -81,7 +81,7 @@ public final class VmcCommands {
                         double level = DoubleArgumentType.getDouble(ctx, "level");
                         MovementConfig.gravityMultiplier = level;
                         MovementConfig.save();
-                        mc.gui.hud.setOverlayMessage(
+                        VmcCompat.overlay(mc,
                             Component.literal("§e[ViveMonkeCraft] §fGravity: §b" + level
                                 + (level == 0.0 ? " §7(zero-G)" : level == 1.0 ? " §7(normal)" : "")),
                             false);

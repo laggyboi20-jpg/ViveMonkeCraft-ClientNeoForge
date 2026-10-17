@@ -2,7 +2,6 @@ package laggyboi.vivemonkecraft.client.platform;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
-import org.lwjgl.glfw.GLFW;
 
 // =====================================================================
 // KEYBINDS                                               [NEOFORGE BODY]
@@ -12,34 +11,42 @@ import org.lwjgl.glfw.GLFW;
 // only how it gets REGISTERED differs, which is what init() hides.
 //
 // On NeoForge registration may only happen inside RegisterKeyMappingsEvent on the
-// MOD event bus, so the actual registration lives in VmcBootstrap and init() is a
-// no-op here. TOGGLE is still created eagerly so the shared client code can hold a
-// reference to it before that event fires.
+// MOD event bus, so the actual registration lives in VmcBootstrap and init() only
+// does the stale-key migration. The mappings are still created eagerly so the
+// shared client code can hold a reference before that event fires.
 //
-// UNBOUND by default (no key out of the box). To toggle from Vivecraft's radial
-// menu you must first bind it to a real keyboard key in Options -> Controls ->
-// Miscellaneous, then assign that key to a radial slot — Vivecraft can only put
-// KEYBOARD keys on radial slots. See the "How-to" page in the config screen.
-//
-// The keybind lands in the same vanilla Options.keyMappings array on every loader,
-// which is what Vivecraft's radial menu reads — so the radial-slot workflow is
-// unchanged from Fabric.
+// Bound to real keys by default so the Vivecraft radial menu can assign them
+// immediately (Vivecraft can only put KEYBOARD keys on radial slots). The user
+// can rebind in Options -> Controls -> Miscellaneous.
 // =====================================================================
 public final class VmcKeybinds {
 
     private VmcKeybinds() {}
 
-    // Shared on all branches — do not diverge, the translation key is the identity
-    // Vivecraft's radial menu shows.
+    // Default keys: V = toggle, B = cycle preset. Shared on all branches — the
+    // translation key is the identity Vivecraft's radial menu shows.
     public static final KeyMapping TOGGLE = new KeyMapping(
             "key.vivemonkecraft.toggle",
-            InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_UNKNOWN,
-            // 1.21.9 replaced the String category constants (CATEGORY_MISC) with
-            // KeyMapping.Category record objects.
+            InputConstants.KEY_V,
             KeyMapping.Category.MISC);
 
-    /** No-op on NeoForge — VmcBootstrap registers TOGGLE in RegisterKeyMappingsEvent. */
+    public static final KeyMapping CYCLE_MODE = new KeyMapping(
+            "key.vivemonkecraft.cyclemode",
+            InputConstants.KEY_B,
+            KeyMapping.Category.MISC);
+
+    /** Registration happens in VmcBootstrap (RegisterKeyMappingsEvent). */
     public static void init() {
+        //? if >=26.3 {
+        // Migrate stale GLFW_KEY_UNKNOWN (-1) saved in options.txt from pre-26.3;
+        // -1 is not a valid SDL scancode and crashes Vivecraft's radial menu.
+        InputConstants.Key staleUnbound = InputConstants.Type.KEYBOARD.getOrCreate(-1);
+        if (TOGGLE.matches(staleUnbound)) {
+            TOGGLE.setKey(InputConstants.UNKNOWN);
+        }
+        if (CYCLE_MODE.matches(staleUnbound)) {
+            CYCLE_MODE.setKey(InputConstants.UNKNOWN);
+        }
+        //?}
     }
 }

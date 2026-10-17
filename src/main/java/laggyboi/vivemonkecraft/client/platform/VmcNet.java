@@ -141,7 +141,11 @@ public final class VmcNet {
 
     /** Client -> server. Caller should gate on {@link #canSendToServer}. */
     public static void sendToServer(CustomPacketPayload payload) {
+        // 1.21.7 moved client-side sending out of PacketDistributor.
+        //? if >=1.21.7 {
         net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(payload);
+        //?} else
+        /*PacketDistributor.sendToServer(payload);*/
     }
 
     /** False when the other end has no receiver (e.g. a server without the companion). */

@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "MMM",
+    "IRI"
+  ],
+  "key": {
+    "M": "minecraft:phantom_membrane",
+    "I": "minecraft:iron_ingot",
+    "R": "minecraft:redstone"
+  },
+  "result": {
+    "id": "vivemonkecraft:hoverboard",
+    "count": 1
+  }
+}
