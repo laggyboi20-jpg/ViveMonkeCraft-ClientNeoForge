@@ -49,9 +49,39 @@ public final class Cosmetics {
         return LayerDefinition.create(mesh, 64, 32);
     }
 
+    // ---- SHOULDER CAT ---------------------------------------------------
+    // An orange tabby sitting on the left shoulder, like a parrot. Attached to
+    // the body, so it leans with the torso. The body's origin is the neck and
+    // the top of the shoulders is y = 0; the left arm spans x 4..8, so the cat
+    // is centred at x = 6.5 with its feet on y = 0. Front is -z.
+    //   body   4x4x5   sitting on the shoulder
+    //   head   5x4x4   on top, poking out past the front of the shoulder
+    //   ears   1x1x2   x2
+    //   muzzle 3x2x1   front of the head
+    //   paws   1x2x1   x2, front of the body
+    //   tail   1x6x1   hanging down the back
+    // Texture (32x32): body 0,0; head 0,9; ears 18,0; muzzle 18,3; paws 18,6; tail 22,6.
+    private static LayerDefinition shoulderCat() {
+        MeshDefinition mesh = new MeshDefinition();
+        PartDefinition cat = mesh.getRoot().addOrReplaceChild("cat", CubeListBuilder.create()
+                .texOffs(0, 0).addBox(-2.0F, -4.0F, -2.0F, 4.0F, 4.0F, 5.0F), PartPose.offset(6.5F, 0.0F, 0.0F));
+        cat.addOrReplaceChild("head", CubeListBuilder.create()
+                .texOffs(0, 9).addBox(-2.5F, -8.0F, -3.5F, 5.0F, 4.0F, 4.0F)
+                .texOffs(18, 0).addBox(-2.5F, -9.0F, -1.5F, 1.0F, 1.0F, 2.0F)
+                .texOffs(18, 0).addBox(1.5F, -9.0F, -1.5F, 1.0F, 1.0F, 2.0F)
+                .texOffs(18, 3).addBox(-1.5F, -6.0F, -4.5F, 3.0F, 2.0F, 1.0F), PartPose.ZERO);
+        cat.addOrReplaceChild("paws", CubeListBuilder.create()
+                .texOffs(18, 6).addBox(-1.5F, -2.0F, -3.0F, 1.0F, 2.0F, 1.0F)
+                .texOffs(18, 6).addBox(0.5F, -2.0F, -3.0F, 1.0F, 2.0F, 1.0F), PartPose.ZERO);
+        cat.addOrReplaceChild("tail", CubeListBuilder.create()
+                .texOffs(22, 6).addBox(-0.5F, -1.0F, 3.0F, 1.0F, 6.0F, 1.0F), PartPose.ZERO);
+        return LayerDefinition.create(mesh, 32, 32);
+    }
+
     private static final Map<String, Cosmetic> ALL = new LinkedHashMap<>();
     static {
         add(new Cosmetic("pink_hat", "Pink Hat", Cosmetic.Slot.HEAD, Cosmetics::pinkHat));
+        add(new Cosmetic("shoulder_cat", "Shoulder Cat", Cosmetic.Slot.BODY, Cosmetics::shoulderCat));
     }
 
     private static void add(Cosmetic c) {
