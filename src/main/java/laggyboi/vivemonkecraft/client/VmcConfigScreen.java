@@ -85,7 +85,7 @@ public final class VmcConfigScreen {
         // reverts to the active preset. try/finally guarantees we always restore.
         Map<String, Object> current = MovementConfig.snapshot();
         try {
-            applyPreset(MovementConfig.activePreset);
+            MovementConfig.applyPreset(MovementConfig.activePreset);
             presetVals = MovementConfig.snapshot();
         } finally {
             MovementConfig.restore(current);
@@ -130,7 +130,7 @@ public final class VmcConfigScreen {
         // time the screen opens).
         builder.setSavingRunnable(() -> {
             if (!pendingPreset[0].equals("— None —")) {
-                applyPreset(pendingPreset[0]);
+                MovementConfig.applyPreset(pendingPreset[0]);
                 MovementConfig.activePreset = pendingPreset[0];
             }
             MovementConfig.save();
@@ -555,6 +555,76 @@ public final class VmcConfigScreen {
                 .setSaveConsumer(v -> MovementConfig.groundedGripRelease = v).build());
 
         // -----------------------------------------------------------------
+        // HOVERBOARD — the tilt-joystick board item
+        // -----------------------------------------------------------------
+        ConfigCategory hover = builder.getOrCreateCategory(Component.literal("Hoverboard"));
+
+        hover.addEntry(eb.startBooleanToggle(Component.literal("Hoverboard enabled"), MovementConfig.hoverboardEnabled)
+                .setDefaultValue(true)
+                .setTooltip(
+                        Component.literal("Hold the Hoverboard item in either hand and tilt it like a joystick:"),
+                        Component.literal("it pushes out of its underside, so 45° forward = full speed ahead."),
+                        Component.literal("Speed Swing locomotion mode only."))
+                .setSaveConsumer(v -> MovementConfig.hoverboardEnabled = v).build());
+
+        hover.addEntry(eb.startDoubleField(Component.literal("Hover height"), MovementConfig.hoverHeight)
+                .setDefaultValue(0.4).setMin(0.0).setMax(0.5)
+                .setTooltip(Component.literal("Gap between your feet and the ground (blocks). Max 0.5 — higher looks like flying to servers."))
+                .setSaveConsumer(v -> MovementConfig.hoverHeight = v).build());
+
+        hover.addEntry(eb.startDoubleField(Component.literal("Acceleration"), MovementConfig.hoverAccel)
+                .setDefaultValue(0.035).setMin(0.0).setMax(0.2)
+                .setTooltip(Component.literal("Push per tick at full tilt. Higher = snappier."))
+                .setSaveConsumer(v -> MovementConfig.hoverAccel = v).build());
+
+        hover.addEntry(eb.startDoubleField(Component.literal("Top speed"), MovementConfig.hoverMaxSpeed)
+                .setDefaultValue(0.7).setMin(0.0).setMax(2.0)
+                .setTooltip(Component.literal("Blocks/tick. 0.7 = 14 blocks/sec."))
+                .setSaveConsumer(v -> MovementConfig.hoverMaxSpeed = v).build());
+
+        hover.addEntry(eb.startDoubleField(Component.literal("Glide (drag)"), MovementConfig.hoverDrag)
+                .setDefaultValue(0.98).setMin(0.5).setMax(1.0)
+                .setTooltip(Component.literal("Speed kept each tick. 1.0 = glide forever, 0.9 = stops quickly."))
+                .setSaveConsumer(v -> MovementConfig.hoverDrag = v).build());
+
+        hover.addEntry(eb.startDoubleField(Component.literal("Tilt deadzone"), MovementConfig.hoverDeadzone)
+                .setDefaultValue(0.12).setMin(0.0).setMax(0.6)
+                .setTooltip(Component.literal("Tilt ignored around level. 0.12 ≈ 7°."))
+                .setSaveConsumer(v -> MovementConfig.hoverDeadzone = v).build());
+
+        hover.addEntry(eb.startDoubleField(Component.literal("Wall ride speed"), MovementConfig.hoverWallRideSpeed)
+                .setDefaultValue(0.45).setMin(0.0).setMax(2.0)
+                .setTooltip(
+                        Component.literal("Speed needed to ride a wall (blocks/tick). Turn the board's"),
+                        Component.literal("underside toward the wall while going this fast."))
+                .setSaveConsumer(v -> MovementConfig.hoverWallRideSpeed = v).build());
+
+        hover.addEntry(eb.startDoubleField(Component.literal("Tilt offset (°)"), MovementConfig.hoverTiltOffset)
+                .setDefaultValue(0.0).setMin(-90.0).setMax(90.0)
+                .setTooltip(
+                        Component.literal("Shifts what counts as 'level' to match how you hold the controller."),
+                        Component.literal("Drifting forward when holding it level? Lower this. Backward? Raise it."))
+                .setSaveConsumer(v -> MovementConfig.hoverTiltOffset = v).build());
+
+        // -----------------------------------------------------------------
+        // COSMETICS — free 3D wearables, one toggle each
+        // -----------------------------------------------------------------
+        ConfigCategory cosmeticsPage = builder.getOrCreateCategory(Component.literal("Cosmetics"));
+
+        cosmeticsPage.addEntry(eb.startTextDescription(Component.literal(
+                "§7Free cosmetics, all unlocked. Other players with ViveMonkeCraft see what you wear."))
+                .build());
+
+        for (laggyboi.vivemonkecraft.client.cosmetics.Cosmetic c
+                : laggyboi.vivemonkecraft.client.cosmetics.Cosmetics.all()) {
+            cosmeticsPage.addEntry(eb.startBooleanToggle(Component.literal(c.name),
+                            laggyboi.vivemonkecraft.client.cosmetics.Cosmetics.isEquipped(c.id))
+                    .setDefaultValue(false)
+                    .setSaveConsumer(v -> laggyboi.vivemonkecraft.client.cosmetics.Cosmetics.setEquipped(c.id, v))
+                    .build());
+        }
+
+        // -----------------------------------------------------------------
         // HOW-TO — text tutorials (no settings, just guidance)
         // -----------------------------------------------------------------
         ConfigCategory howto = builder.getOrCreateCategory(Component.literal("How-to"));
@@ -577,122 +647,4 @@ public final class VmcConfigScreen {
         return builder.build();
     }
 
-    // =========================================================================
-    // PRESETS
-    // =========================================================================
-
-    // Every preset starts from the COMPLETE Default baseline and then applies its own
-    // overrides, so each preset is a self-contained configuration (and the reset
-    // buttons above can resolve a value for every field). Picking a preset therefore
-    // resets settings it doesn't mention back to Default — intended, so "reset to this
-    // preset" and the active-preset indicator are always truthful.
-    private void applyPreset(String preset) {
-        // Full Default baseline first — every preset builds on this.
-        MovementConfig.applyDefaultPreset();
-
-        switch (preset) {
-            case "Default":
-                // Just the baseline.
-                break;
-
-            case "tutorial":
-                //it gives every helping settings turned on
-                MovementConfig.pullStrength        = 2.5;
-                MovementConfig.groundFriction      = 1.0;
-                MovementConfig.airFriction         = 0.1;
-                MovementConfig.wallStickiness      = 1.0;
-                MovementConfig.floorStickiness     = 1.0;
-                MovementConfig.minImpulse          = 0.002;
-                MovementConfig.handReachMultiplier = 1.0;
-                MovementConfig.velocityLimit       = 0.05;
-                MovementConfig.jumpMultiplier      = 1.8;
-                MovementConfig.maxArmLength        = 3.0;
-                MovementConfig.handRadius          = 0.10;
-                MovementConfig.hitboxHeightScale   = 0.25;
-                MovementConfig.stepAssist          = true;
-                MovementConfig.stepTeleport        = true;
-                MovementConfig.stepHeight          = 1.5;
-                MovementConfig.jumpMultiplier      = 1.5;
-                MovementConfig.maxJumpSpeed        = 1.0;
-                MovementConfig.velocityHistorySize = 6;
-                MovementConfig.gravityMultiplier   = 1.0;
-                MovementConfig.showHandMarkers     = true;
-                MovementConfig.monkeModel          = true;
-                MovementConfig.realMonke           = true;
-                MovementConfig.modelTorsoPitch     = -120.0;
-                MovementConfig.gtPhysics           = false;
-                break;
-
-            case "Long Arms":
-                // Closer to the official Gorilla Tag experience:
-                //   - Stronger pull so arm swings feel punchy.
-                //   - Lower air drag so throws carry farther.
-                //   - Slightly easier throw trigger (lower velocityLimit).
-                //   - More powerful launches with a higher cap.
-                //   - Walls SLIDE (no clinging) so you keep momentum instead of sticking.
-                //   - MONKE MODEL on: the legless GT body with the -120° torso lean.
-                MovementConfig.pullStrength        = 2.5;
-                MovementConfig.groundFriction      = 0.4;
-                MovementConfig.airFriction         = 0.1;
-                MovementConfig.wallStickiness      = 0.9;
-                MovementConfig.floorStickiness     = 1.0;
-                MovementConfig.minImpulse          = 0.002;
-                MovementConfig.handReachMultiplier = 3.5;
-                MovementConfig.velocityLimit       = 0.05;
-                MovementConfig.jumpMultiplier      = 1.8;
-                MovementConfig.maxJumpSpeed        = 1.5;
-                MovementConfig.velocityHistorySize = 5;
-                MovementConfig.gravityMultiplier   = 1.0;
-                MovementConfig.showHandMarkers     = true;
-                MovementConfig.monkeModel          = true;
-                MovementConfig.realMonke           = true;
-                MovementConfig.modelTorsoPitch     = -120.0;
-
-                break;
-
-            case "Zero Gravity":
-                // Space/floating experience:
-                //   - No gravity: you float after releasing a surface.
-                //   - Very low air drag: momentum carries indefinitely.
-                //   - Bigger throws so you can actually navigate.
-                //   - Full wall stickiness so you can push off any surface.
-                MovementConfig.gravityMultiplier   = 0.1;
-                MovementConfig.airFriction         = 0.05;
-                MovementConfig.wallStickiness      = 1.0;
-                MovementConfig.floorStickiness     = 0.8;
-                MovementConfig.pullStrength        = 2.0;
-                MovementConfig.jumpMultiplier      = 2.0;
-                MovementConfig.maxJumpSpeed        = 2.5;
-                MovementConfig.groundFriction      = 0.9;
-                MovementConfig.monkeModel          = true;
-                MovementConfig.realMonke           = true;
-                MovementConfig.modelTorsoPitch     = -120.0;
-                break;
-
-            case "Speed Run":
-                // Built for covering ground as fast as possible:
-                //   - Very high pull strength for huge launches.
-                //   - Long gorilla arms to grab from further away.
-                //   - Low air drag so speed carries between grabs.
-                //   - Fewer history ticks for snappier throw detection.
-                //   - High max speed so you can actually rocket.
-                MovementConfig.pullStrength        = 5.0;
-                MovementConfig.handReachMultiplier = 1.0;
-                MovementConfig.maxArmLength        = 1.5;
-                MovementConfig.airFriction         = 0.1;
-                MovementConfig.jumpMultiplier      = 3.5;
-                MovementConfig.maxJumpSpeed        = 3.0;
-                MovementConfig.velocityHistorySize = 4;
-                MovementConfig.groundFriction      = 0.7;
-                MovementConfig.gravityMultiplier   = 0.9;
-                MovementConfig.monkeModel          = true;
-                MovementConfig.realMonke           = true;
-                MovementConfig.modelTorsoPitch     = -120.0;
-                break;
-
-            default:
-                // Unknown / "— None —": leave the Default baseline as-is.
-                break;
-        }
-    }
 }

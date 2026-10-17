@@ -2,7 +2,12 @@ package laggyboi.vivemonkecraft.mixin.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import laggyboi.vivemonkecraft.client.VmcMonkeRenderState;
+//? if >=1.21.9 {
 import net.minecraft.client.renderer.SubmitNodeCollector;
+//?} else {
+/*import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.renderer.MultiBufferSource;
+*///?}
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -40,6 +45,7 @@ public class ArmorLayerMonkeMixin {
     // submit() has the full render state — record whether this player is monke.
     // Explicit descriptor targets the HumanoidRenderState overload, not the
     // EntityRenderState bridge method.
+    //? if >=1.21.9 {
     @Inject(
         method = "submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILnet/minecraft/client/renderer/entity/state/HumanoidRenderState;FF)V",
         at = @At("HEAD"),
@@ -67,4 +73,28 @@ public class ArmorLayerMonkeMixin {
             ci.cancel();
         }
     }
+    //?} else {
+    /*// Before 1.21.9 the layer drew through render() with a MultiBufferSource.
+    @Inject(
+        method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILnet/minecraft/client/renderer/entity/state/HumanoidRenderState;FF)V",
+        at = @At("HEAD")
+    )
+    private void vmc$captureMonke(PoseStack poseStack, MultiBufferSource buffer, int packedLight,
+                                  HumanoidRenderState state, float yRot, float xRot, CallbackInfo ci) {
+        vmc$hideLegArmor = state instanceof VmcMonkeRenderState monke && monke.vmc$isMonke();
+    }
+
+    @Inject(
+        method = "renderArmorPiece",
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private void vmc$skipLegArmor(PoseStack poseStack, MultiBufferSource buffer, ItemStack stack,
+                                  EquipmentSlot slot, int packedLight, HumanoidModel<?> model,
+                                  CallbackInfo ci) {
+        if (vmc$hideLegArmor && (slot == EquipmentSlot.LEGS || slot == EquipmentSlot.FEET)) {
+            ci.cancel();
+        }
+    }
+    *///?}
 }
