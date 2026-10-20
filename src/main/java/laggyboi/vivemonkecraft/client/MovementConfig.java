@@ -316,8 +316,8 @@ public final class MovementConfig {
     // you forward, tilting it sideways drives you sideways, and holding it level
     // just hovers. Speed Swing locomotion mode only.
     public static boolean hoverboardEnabled = true;
-    // Gap kept between your feet and the ground (blocks). Max 0.5: above that,
-    // servers treat you as flying.
+    // Gap kept between your feet and the ground (blocks). Up to 4 in singleplayer
+    // or with op; on servers it is held to 0.5 — above that they treat you as flying.
     public static double hoverHeight = 0.4;
     // Push added per tick at full tilt (45° or more), blocks/tick².
     public static double hoverAccel = 0.035;
@@ -969,7 +969,7 @@ public final class MovementConfig {
             sb.append("# it pushes out of its underside, so 45 degrees forward = full speed ahead.\n");
             sb.append("# Speed Swing locomotion mode only. true/false.\n");
             sb.append("hoverboardEnabled=").append(hoverboardEnabled).append("\n");
-            sb.append("# Gap between feet and ground (blocks). Max 0.5 (servers kick flyers).\n");
+            sb.append("# Gap between feet and ground (blocks). Up to 4 in singleplayer / with op; 0.5 on servers (they kick flyers).\n");
             sb.append("hoverHeight=").append(hoverHeight).append("\n");
             sb.append("# Push per tick at full tilt (blocks/tick^2).\n");
             sb.append("hoverAccel=").append(hoverAccel).append("\n");

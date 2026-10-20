@@ -577,8 +577,10 @@ public final class VmcConfigScreen {
                 .setSaveConsumer(v -> MovementConfig.hoverboardEnabled = v).build());
 
         hover.addEntry(eb.startDoubleField(Component.literal("Hover height"), MovementConfig.hoverHeight)
-                .setDefaultValue(0.4).setMin(0.0).setMax(0.5)
-                .setTooltip(Component.literal("Gap between your feet and the ground (blocks). Max 0.5 — higher looks like flying to servers."))
+                .setDefaultValue(0.4).setMin(0.0).setMax(4.0)
+                .setTooltip(
+                        Component.literal("Gap between your feet and the ground (blocks). Up to 4 in singleplayer or with op."),
+                        Component.literal("On servers it stays at 0.5 max — higher looks like flying and gets you kicked."))
                 .setSaveConsumer(v -> MovementConfig.hoverHeight = v).build());
 
         hover.addEntry(eb.startDoubleField(Component.literal("Acceleration"), MovementConfig.hoverAccel)

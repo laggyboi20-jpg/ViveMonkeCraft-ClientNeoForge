@@ -37,7 +37,8 @@ public final class SettingCaps {
     public static final double MIN_AIR_FRICTION = 0.8;  // airFriction (lower = less drag)
     public static final double MAX_HOVER_SPEED  = 0.7;  // hoverMaxSpeed (blocks/tick)
     public static final double MAX_HOVER_ACCEL  = 0.05; // hoverAccel (blocks/tick²)
-    public static final double MAX_HOVER_HEIGHT = 0.5;  // hoverHeight — hard limit, see hoverHeight()
+    public static final double MAX_HOVER_HEIGHT = 0.5;  // hoverHeight on servers — see hoverHeight()
+    public static final double MAX_HOVER_HEIGHT_FREE = 4.0; // hoverHeight in singleplayer / with op
 
     private SettingCaps() {}
 
@@ -123,11 +124,20 @@ public final class SettingCaps {
     }
 
     /**
-     * hoverHeight, clamped to 0..0.5 for EVERYONE (ops included): vanilla servers
-     * kick a player whose feet stay more than ~0.55 above any block for 4 s.
+     * hoverHeight. Vanilla servers without allow-flight kick a player whose feet
+     * stay more than ~0.55 above any block for 4 s, so on a server it is clamped
+     * to 0..0.5. Singleplayer (flight is always allowed there) and ops (whose
+     * server can turn allow-flight on) get up to MAX_HOVER_HEIGHT_FREE.
      */
     public static double hoverHeight() {
-        return Math.max(0.0, Math.min(MAX_HOVER_HEIGHT, MovementConfig.hoverHeight));
+        boolean free = Minecraft.getInstance().hasSingleplayerServer() || unrestricted();
+        return Math.max(0.0, Math.min(free ? MAX_HOVER_HEIGHT_FREE : MAX_HOVER_HEIGHT,
+                                      MovementConfig.hoverHeight));
+    }
+
+    /** Hover distance kept off a wall — the hover height, but never more than 0.5. */
+    public static double hoverWallGap() {
+        return Math.min(MAX_HOVER_HEIGHT, hoverHeight());
     }
 
     // ---- Gorilla Tag clone (mode 1) — same allowances, converted to GT units ----
