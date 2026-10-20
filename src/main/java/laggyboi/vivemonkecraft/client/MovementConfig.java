@@ -179,7 +179,7 @@ public final class MovementConfig {
     public static boolean gtPhysics = false;
 
     // LOCOMOTION MODE — index into GorillaLocomotionHandler's mode registry.
-    //   0 = Speed Swing, 1 = GT Anchor, 2 = Charge Jump
+    //   0 = Speed Swing, 1 = Gorilla Tag (Player.cs clone), 2 = Charge Jump
     public static double locomotionMode = 0;
 
     // CHARGE JUMP (mode 2) — launch speed (blocks/tick) for a bare tap vs full hold.
@@ -212,6 +212,26 @@ public final class MovementConfig {
     // swing carries you twice as far, 0.5 = half. Implemented by letting the
     // anchor RECEDE as the hand moves (the servo itself stays 1:1 and stable).
     public static double gtPushStrength = 1.0;
+
+    // GORILLA TAG CLONE (locomotion mode 1) — Player.cs's own tuning, in Gorilla
+    // Tag's units (1 block = 1 m). Defaults are the GorillaLocomotion values.
+    //   gtJumpMultiplier  — throw = average body speed × this
+    //   gtMaxJumpSpeed    — throw speed cap, m/s
+    //   gtVelocityLimit   — slower than this (m/s) and touching never throws
+    //   gtVelocityHistory — ticks averaged for the throw (GT: 3 frames ≈ 2 ticks)
+    //   gtArmLength       — hands are clamped this far (m) from the head
+    //   gtHandRadius      — hand collision sphere radius, m
+    //   gtGravity         — m/s² (Minecraft's own is ~32; GT is real-world 9.81)
+    //   gtGroundFriction  — horizontal speed kept per tick standing on the ground
+    // gtUnstickDistance and gtIceSlip (hand slide on ice) are shared with it.
+    public static double gtJumpMultiplier  = 1.1;
+    public static double gtMaxJumpSpeed    = 6.5;
+    public static double gtVelocityLimit   = 0.3;
+    public static double gtVelocityHistory = 2;
+    public static double gtArmLength       = 1.5;
+    public static double gtHandRadius      = 0.05;
+    public static double gtGravity         = 9.81;
+    public static double gtGroundFriction  = 0.6;
 
     // REAL MONKE — gorilla size: caps the collision box HEIGHT at 0.5 blocks on
     // both client and server so you fit through 1-block tunnels. Height only —
@@ -576,6 +596,14 @@ public final class MovementConfig {
         gtUnstickDistance   = 1.0;
         gtIceSlip           = 0.95;
         gtPushStrength      = 1.0;
+        gtJumpMultiplier    = 1.1;
+        gtMaxJumpSpeed      = 6.5;
+        gtVelocityLimit     = 0.3;
+        gtVelocityHistory   = 2;
+        gtArmLength         = 1.5;
+        gtHandRadius        = 0.05;
+        gtGravity           = 9.81;
+        gtGroundFriction    = 0.6;
         cameraHeightOffset  = 0.0;
         clampHandModels     = true;
         handSurfaceCollision = true;
@@ -667,6 +695,14 @@ public final class MovementConfig {
                     gtUnstickDistance   = parseD(p, "gtUnstickDistance",   gtUnstickDistance);
                     gtIceSlip           = parseD(p, "gtIceSlip",           gtIceSlip);
                     gtPushStrength      = parseD(p, "gtPushStrength",      gtPushStrength);
+                    gtJumpMultiplier    = parseD(p, "gtJumpMultiplier",    gtJumpMultiplier);
+                    gtMaxJumpSpeed      = parseD(p, "gtMaxJumpSpeed",      gtMaxJumpSpeed);
+                    gtVelocityLimit     = parseD(p, "gtVelocityLimit",     gtVelocityLimit);
+                    gtVelocityHistory   = parseD(p, "gtVelocityHistory",   gtVelocityHistory);
+                    gtArmLength         = parseD(p, "gtArmLength",         gtArmLength);
+                    gtHandRadius        = parseD(p, "gtHandRadius",        gtHandRadius);
+                    gtGravity           = parseD(p, "gtGravity",           gtGravity);
+                    gtGroundFriction    = parseD(p, "gtGroundFriction",    gtGroundFriction);
                     realMonke           = parseB(p, "realMonke",           realMonke);
                     cameraHeightOffset  = parseD(p, "cameraHeightOffset",  cameraHeightOffset);
                     monkeModel          = parseB(p, "monkeModel",          monkeModel);
@@ -844,7 +880,7 @@ public final class MovementConfig {
             sb.append("# to test it, but it gets no tuning UI and no support.\n");
             sb.append("gtPhysics=").append(gtPhysics).append("\n\n");
 
-            sb.append("# LOCOMOTION MODE: 0=Speed Swing, 1=GT Anchor, 2=Charge Jump\n");
+            sb.append("# LOCOMOTION MODE: 0=Speed Swing, 1=Gorilla Tag clone, 2=Charge Jump\n");
             sb.append("locomotionMode=").append(locomotionMode).append("\n\n");
 
             sb.append("# CHARGE JUMP (mode 2): launch speed for a tap vs full ~1.5s hold\n");
@@ -872,6 +908,17 @@ public final class MovementConfig {
             sb.append("# GT PUSH STRENGTH (anchor mode): body movement = hand movement x this.\n");
             sb.append("# 1.0 = authentic Gorilla Tag 1:1, 2.0 = twice as far, 0.5 = half.\n");
             sb.append("gtPushStrength=").append(gtPushStrength).append("\n\n");
+
+            sb.append("# GORILLA TAG CLONE (mode 1): Player.cs tuning in GT units (1 block = 1 m).\n");
+            sb.append("# Defaults are the official GorillaLocomotion values.\n");
+            sb.append("gtJumpMultiplier=").append(gtJumpMultiplier).append("\n");
+            sb.append("gtMaxJumpSpeed=").append(gtMaxJumpSpeed).append("\n");
+            sb.append("gtVelocityLimit=").append(gtVelocityLimit).append("\n");
+            sb.append("gtVelocityHistory=").append(gtVelocityHistory).append("\n");
+            sb.append("gtArmLength=").append(gtArmLength).append("\n");
+            sb.append("gtHandRadius=").append(gtHandRadius).append("\n");
+            sb.append("gtGravity=").append(gtGravity).append("\n");
+            sb.append("gtGroundFriction=").append(gtGroundFriction).append("\n\n");
 
             sb.append("# REAL MONKE: gorilla size - 0.5-block-tall collision box on client AND\n");
             sb.append("# server so you fit 1-block tunnels. Height only - no view drop. true/false.\n");

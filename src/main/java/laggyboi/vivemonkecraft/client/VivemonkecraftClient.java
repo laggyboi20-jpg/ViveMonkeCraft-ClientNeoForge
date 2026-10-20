@@ -111,6 +111,9 @@ public class VivemonkecraftClient {
         // Register the camera stabilization vignette (motion-sickness reduction).
         CameraStabilizationRenderer.register();
 
+        // The 3D hoverboard drawn in hand (items/hoverboard.json points at it).
+        HoverboardModel.register();
+
         // Load the editable config at startup (creates it the first time).
         MovementConfig.load();
 

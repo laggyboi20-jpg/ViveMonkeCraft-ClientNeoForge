@@ -1,6 +1,9 @@
 {
   "model": {
-    "type": "minecraft:model",
-    "model": "vivemonkecraft:item/hoverboard"
+    "type": "minecraft:special",
+    "base": "vivemonkecraft:item/hoverboard",
+    "model": {
+      "type": "vivemonkecraft:hoverboard"
+    }
   }
 }

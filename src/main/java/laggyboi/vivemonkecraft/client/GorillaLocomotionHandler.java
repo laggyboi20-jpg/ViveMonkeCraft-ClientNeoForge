@@ -62,7 +62,7 @@ public class GorillaLocomotionHandler {
     public static final int MODE_CHARGE_JUMP = 2;
     public static final int MODE_COUNT       = 3;
 
-    private static final String[] MODE_NAMES = { "Speed Swing", "GT Anchor", "Charge Jump" };
+    private static final String[] MODE_NAMES = { "Speed Swing", "Gorilla Tag", "Charge Jump" };
 
     public static String modeName(int i) {
         return (i >= 0 && i < MODE_NAMES.length) ? MODE_NAMES[i] : ("Mode " + i);
@@ -173,6 +173,9 @@ public class GorillaLocomotionHandler {
     private final HoverboardHandler hoverboard = new HoverboardHandler();
     private final HandState mainHand = new HandState();
     private final HandState offHand  = new HandState();
+
+    // Locomotion mode 1: the Gorilla Tag Player.cs clone (owns the body while live).
+    private final GtCloneLocomotion gtClone = new GtCloneLocomotion();
 
     // Rolling average of the intended swing velocity (blocks/tick), used for the
     // throw/jump when you let go.
@@ -307,6 +310,7 @@ public class GorillaLocomotionHandler {
             offHand.release();
             mainHand.wasGripping = false;
             offHand.wasGripping  = false;
+            gtClone.reset();
             wasAnyGripping     = false;
             smoothedGripVel    = Vec3.ZERO;
             swingHistory       = null;
@@ -351,6 +355,7 @@ public class GorillaLocomotionHandler {
             offHand.release();
             mainHand.wasGripping = false;
             offHand.wasGripping  = false;
+            gtClone.reset();
             wasAnyGripping       = false;
             smoothedGripVel      = Vec3.ZERO;
             if (noGravSet) { player.setNoGravity(false); noGravSet = false; }
@@ -421,6 +426,7 @@ public class GorillaLocomotionHandler {
             offHand.release();
             mainHand.wasGripping = false;
             offHand.wasGripping  = false;
+            gtClone.reset();
             wasAnyGripping  = false;
             smoothedGripVel = Vec3.ZERO;
             swingHistory    = null;
@@ -518,16 +524,22 @@ public class GorillaLocomotionHandler {
         int activeMode = (int) MovementConfig.locomotionMode;
 
         // ---- HOVERBOARD ----
-        // The hand holding a board steers it instead of grabbing (Speed Swing mode
-        // only; probe() returns null in the other modes, leaving both hands normal).
-        InteractionHand boardHand = hoverboard.probe(client, player, vr, activeMode == MODE_SPEED_SWING);
+        // The hand holding a board steers it instead of grabbing (Speed Swing and
+        // Gorilla Tag modes; probe() returns null otherwise, leaving both hands normal).
+        InteractionHand boardHand = hoverboard.probe(client, player, vr,
+                activeMode == MODE_SPEED_SWING, activeMode == MODE_GT_ANCHOR);
         boolean boardMain = boardHand == InteractionHand.MAIN_HAND;
         boolean boardOff  = boardHand == InteractionHand.OFF_HAND;
         boolean riding    = hoverboard.isRiding();
+        if (activeMode != MODE_GT_ANCHOR) gtClone.reset();
         if (activeMode == MODE_GT_ANCHOR) {
-            applyGtPhysics(client, player, touchMain, touchOff,
-                           swingMain, swingOff, headPos,
-                           topFaceMain, topFaceOff, fallSpeed);
+            boolean ran = applyGtClone(client, player, !boardMain, !boardOff);
+            // Board on top of the clone; it reads the written velocity next tick.
+            if (ran && boardHand != null
+                    && hoverboard.apply(player, true, GtCloneLocomotion.gravityPerTick(player))) {
+                grippingThisTick = true;
+                suppressServerFall(client);
+            }
         } else if (activeMode == MODE_CHARGE_JUMP) {
             applyChargePhysics(client, player, touchMain, touchOff,
                            swingMain, swingOff, headPos, fallSpeed);
@@ -1031,7 +1043,10 @@ public class GorillaLocomotionHandler {
 
         // Record the velocity we are handing to the engine this tick — next tick's
         // teleport detection compares actual movement against this expectation.
-        prevTickVel = player.getDeltaMovement();
+        // (The Gorilla Tag clone already moved the body itself this tick.)
+        prevTickVel = (activeMode != MODE_GT_ANCHOR) ? player.getDeltaMovement()
+                    : gtClone.vanillaMoves() ? gtClone.lastDisplacement().add(player.getDeltaMovement())
+                    : gtClone.lastDisplacement();
 
         // Baseline for next tick's hand-surface sweep (raw, un-clamped positions).
         prevMainRaw = rawMain;
@@ -1222,6 +1237,8 @@ public class GorillaLocomotionHandler {
         swingHistory = null;
         swingAvg = Vec3.ZERO;
         wasAnyGripping = false;
+        gtClone.reset();
+        GtCloneLocomotion.ownsBody = false;
         HandMarkerRenderer.clearState();
         VrHandClamp.clear();
         if (client != null && client.player != null) {
@@ -1248,6 +1265,8 @@ public class GorillaLocomotionHandler {
         mainHand.wasGripping = false;
         offHand.wasGripping  = false;
         wasAnyGripping  = false;
+        gtClone.reset();
+        GtCloneLocomotion.ownsBody = false;
         smoothedGripVel = Vec3.ZERO;
         swingHistory    = null;
         swingAvg        = Vec3.ZERO;
@@ -1265,7 +1284,61 @@ public class GorillaLocomotionHandler {
     }
 
     // =========================================================================
-    // GT ANCHOR PHYSICS  (MovementConfig.gtPhysics = true)
+    // GORILLA TAG CLONE  (MODE_GT_ANCHOR)
+    // =========================================================================
+    //
+    // Runs GtCloneLocomotion (the Player.cs port) on Vivecraft's pre-tick pose and
+    // mirrors its hand contacts into the HandStates so markers, the hand-model
+    // clamp, tool-touch mining and fall suppression all keep working. In water
+    // vanilla swimming moves you but the hands still push off blocks; lava, creative
+    // flight and spectator stay vanilla (the clone sits out). Returns true if the
+    // clone drove the body this tick.
+    private boolean applyGtClone(Minecraft client, LocalPlayer player, boolean useMain, boolean useOff) {
+        if (noGravSet) { player.setNoGravity(false); noGravSet = false; }
+        smoothedGripVel = Vec3.ZERO;
+
+        Vec3[] pose = vr.getTickPose();
+        boolean vanillaOwns = pose == null || player.isInLava()
+                || player.getAbilities().flying || player.isSpectator();
+        if (vanillaOwns) {
+            gtClone.reset();
+            mainHand.release();
+            offHand.release();
+            wasAnyGripping = false;
+            return false;
+        }
+
+        // The pre-tick pose is NOT lowered by the view drop (Real Monke / camera height
+        // offset) — only the render pose is. Apply the same drop so the hands collide
+        // where you see them; without it they float ~0.9 above the floor and never touch.
+        Vec3 drop = new Vec3(0.0, -VrViewDrop.currentDrop(), 0.0);
+        gtClone.tick(player, pose[0].add(drop), pose[1].add(drop), pose[2].add(drop), useMain, useOff);
+        if (VmcDebugLog.on()) {
+            Vec3 m = gtClone.followerMain(), o = gtClone.followerOff(), d = gtClone.lastDisplacement();
+            VmcDebugLog.event("GT", String.format(
+                    "drop=%.2f head=(%.2f,%.2f,%.2f) main=(%.2f,%.2f,%.2f)%s off=(%.2f,%.2f,%.2f)%s move=(%.3f,%.3f,%.3f)",
+                    -drop.y, pose[0].x, pose[0].y + drop.y, pose[0].z,
+                    m.x, m.y, m.z, gtClone.touchingMain() ? "*" : "",
+                    o.x, o.y, o.z, gtClone.touchingOff() ? "*" : "",
+                    d.x, d.y, d.z));
+        }
+
+        mainHand.gripping      = gtClone.touchingMain();
+        mainHand.anchorDisplay = mainHand.gripping ? gtClone.followerMain() : null;
+        offHand.gripping       = gtClone.touchingOff();
+        offHand.anchorDisplay  = offHand.gripping ? gtClone.followerOff() : null;
+
+        boolean anyGrip = mainHand.gripping || offHand.gripping;
+        if (anyGrip) {
+            grippingThisTick = true;
+            suppressServerFall(client);
+        }
+        wasAnyGripping = anyGrip;
+        return true;
+    }
+
+    // =========================================================================
+    // GT ANCHOR PHYSICS  (legacy servo — no longer dispatched, kept for reference)
     // =========================================================================
     //
     // Faithful port of the official GorillaLocomotion Player.cs algorithm:

@@ -130,6 +130,36 @@ public final class SettingCaps {
         return Math.max(0.0, Math.min(MAX_HOVER_HEIGHT, MovementConfig.hoverHeight));
     }
 
+    // ---- Gorilla Tag clone (mode 1) — same allowances, converted to GT units ----
+
+    /** gtJumpMultiplier, capped like jumpMultiplier. */
+    public static double gtJumpMultiplier() {
+        return capMax(MovementConfig.gtJumpMultiplier, MAX_JUMP_MULT, ServerLimits.allowJumpMultiplier());
+    }
+
+    /** gtMaxJumpSpeed in blocks/tick: the m/s setting under the same launch caps as maxJumpSpeed. */
+    public static double gtMaxJumpSpeedPerTick() {
+        double allow = ServerLimits.allowMaxJumpSpeed();
+        double capped = capMax(MovementConfig.gtMaxJumpSpeed / 20.0, MAX_JUMP_SPEED, allow);
+        return ServerLimits.maxJumpSpeed(capped);
+    }
+
+    /** gtArmLength, capped like maxArmLength. */
+    public static double gtArmLength() {
+        return capMax(MovementConfig.gtArmLength, MAX_ARM_LENGTH, ServerLimits.allowArmLength());
+    }
+
+    /** gtHandRadius, capped like handRadius. */
+    public static double gtHandRadius() {
+        return capMax(MovementConfig.gtHandRadius, MAX_HAND_RADIUS, ServerLimits.allowHandRadius());
+    }
+
+    /** gtGravity (m/s²), clamped from below by the gravity allowance (9.81 × multiplier). */
+    public static double gtGravity() {
+        double allowMin = ServerLimits.allowGravityMin();
+        return capMin(MovementConfig.gtGravity, 9.81 * MIN_GRAVITY, allowMin >= 0.0 ? 9.81 * allowMin : -1.0);
+    }
+
     // -----------------------------------------------------------------------
     // Cap helpers
     // -----------------------------------------------------------------------

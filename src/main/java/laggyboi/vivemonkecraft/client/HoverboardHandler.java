@@ -35,10 +35,13 @@ import net.minecraft.world.phys.Vec3;
 //           wall and you ride it, hitbox kept ~0.03 off the face. Drop below the
 //           speed and you fall off.
 //
-// Driven by GorillaLocomotionHandler (Speed Swing locomotion mode only):
+// Driven by GorillaLocomotionHandler (Speed Swing and Gorilla Tag modes):
 //   probe() before the physics, so the hand holding the board never grips and
 //            the non-grip friction/gravity code stands aside while riding;
 //   apply() after the physics, layering the board on top of any free-hand push.
+// In Gorilla Tag mode the clone owns the body (no vanilla drag/gravity): the
+// velocity we write is picked up by the clone next tick, which then adds its own
+// gravity — apply() is told that gravity so it can pre-compensate the hover.
 // =====================================================================
 public final class HoverboardHandler {
 
@@ -81,6 +84,7 @@ public final class HoverboardHandler {
     private double  gap;                          // feet→floor or side→wall (blocks)
     private Vec3    wallNormal = Vec3.ZERO;       // out of the wall face
     private boolean warnedGt = false;
+    private boolean gtPhysics = false;           // Gorilla Tag clone owns the body
 
     /** True while the board is holding you over a floor or wall this tick. */
     public boolean isRiding() {
@@ -90,10 +94,12 @@ public final class HoverboardHandler {
     /**
      * Finds the hand holding a hoverboard and the surface it rides this tick.
      * Returns that hand (its grip must be skipped), or null when no board is
-     * active — including outside Speed Swing mode, where the board does nothing.
+     * active — including in the Charge Jump mode, where the board does nothing.
      */
-    public InteractionHand probe(Minecraft mc, LocalPlayer p, VivecraftBridge vr, boolean speedMode) {
+    public InteractionHand probe(Minecraft mc, LocalPlayer p, VivecraftBridge vr,
+                                 boolean speedMode, boolean gtMode) {
         surface = Surface.NONE;
+        gtPhysics = gtMode;
 
         InteractionHand hand = p.getMainHandItem().is(VmcItems.hoverboard()) ? InteractionHand.MAIN_HAND
                              : p.getOffhandItem().is(VmcItems.hoverboard())  ? InteractionHand.OFF_HAND
@@ -102,10 +108,10 @@ public final class HoverboardHandler {
             warnedGt = false;
             return null;
         }
-        if (!speedMode) {
+        if (!speedMode && !gtMode) {
             if (!warnedGt) {
                 VmcCompat.overlay(mc, Component.literal(
-                        "Hoverboard needs the Speed Swing locomotion mode"), false);
+                        "Hoverboard needs the Speed Swing or Gorilla Tag locomotion mode"), false);
                 warnedGt = true;
             }
             return null;
@@ -135,6 +141,14 @@ public final class HoverboardHandler {
      * hasn't been through vanilla's drag yet. Returns true if it rode this tick.
      */
     public boolean apply(LocalPlayer p, boolean velocityFresh) {
+        return apply(p, velocityFresh, 0.0);
+    }
+
+    /**
+     * {@code lift} is added to the vertical velocity written — the gravity the
+     * physics will take off again before the move (Gorilla Tag mode).
+     */
+    public boolean apply(LocalPlayer p, boolean velocityFresh, double lift) {
         if (surface == Surface.NONE) return false;
 
         double drag     = clamp(MovementConfig.hoverDrag, 0.0, 1.0);
@@ -152,7 +166,7 @@ public final class HoverboardHandler {
             double err = SettingCaps.hoverHeight() - gap;
             double vy  = clamp(err * HOVER_GAIN, -MAX_SINK, MAX_LIFT);
             if (err < 0 && v.y > vy) vy = v.y;
-            p.setDeltaMovement(h.x, vy, h.z);
+            p.setDeltaMovement(h.x, vy + lift, h.z);
         } else {
             Vec3 n  = wallNormal;
             Vec3 vt = v.subtract(n.scale(v.dot(n))).scale(drag)
@@ -160,7 +174,7 @@ public final class HoverboardHandler {
                     .add(0, -WALL_SINK, 0);
             vt = capLength(vt, maxSpeed);
             double pull = clamp((WALL_GAP - gap) * HOVER_GAIN, -0.3, 0.3);
-            p.setDeltaMovement(vt.add(n.scale(pull)));
+            p.setDeltaMovement(vt.add(n.scale(pull)).add(0, lift, 0));
         }
         p.resetFallDistance();
         return true;
@@ -202,7 +216,8 @@ public final class HoverboardHandler {
     private boolean probeWall(Minecraft mc, LocalPlayer p) {
         double minSpeed = MovementConfig.hoverWallRideSpeed;
         if (surface == Surface.WALL) minSpeed *= WALL_KEEP;
-        if (undoVanillaDecay(p).length() < minSpeed) return false;
+        Vec3 cur = gtPhysics ? p.getDeltaMovement() : undoVanillaDecay(p);
+        if (cur.length() < minSpeed) return false;
 
         // The board's underside must face sideways, toward the wall.
         Vec3 down = new Vec3(-boardUp.x, 0, -boardUp.z);

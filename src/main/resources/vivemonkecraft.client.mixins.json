@@ -8,6 +8,7 @@
     "EntitySuffocationMixin",
     "FallDamageMixin",
     "FluidEyeBoxMixin",
+    "GtTravelMixin",
     "InteractTrackerMixin",
     "LivingEntityRendererInvoker",
     "SwingTrackerMixin",
@@ -16,6 +17,7 @@
     "PlayerModelMixin",
     "RenderStateHooksMixin",
     "RendererHooksMixin",
+    "SpecialModelRenderersAccessor",
     "VrCameraHeightMixin"
   ],
   "injectors": {

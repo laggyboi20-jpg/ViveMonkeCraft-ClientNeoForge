@@ -32,14 +32,6 @@ import net.minecraft.network.chat.Component;
 
 public final class VmcConfigScreen {
 
-    // GT PHYSICS UI — hidden. Legacy (speed-based) physics is the one supported
-    // motor, so the whole "GT Physics" page (the anchor-mode toggle + its tuning
-    // knobs) is not built and there is no way to switch modes in-game. The GT
-    // engine itself is untouched in GorillaLocomotionHandler and still reads
-    // MovementConfig.gtPhysics, which can only be set by hand-editing
-    // config/vivemonkecraft.properties. Flip this to true to bring the page back.
-    private static final boolean SHOW_GT_PHYSICS_UI = false;
-
     // The active preset's value for every field, captured at screen-build time.
     // Each entry's setDefaultValue (= what its reset arrow reverts to) reads from here.
     private Map<String, Object> presetVals;
@@ -419,55 +411,72 @@ public final class VmcConfigScreen {
                 .setSaveConsumer(v -> MovementConfig.magmaTouchDamage = v).build());
 
         // ====================================================================
-        // GT PHYSICS — everything about the anchor-mode port of the official
-        // GorillaLocomotion algorithm lives on its own page.
-        //
-        // HIDDEN (SHOW_GT_PHYSICS_UI = false): legacy physics is the supported
-        // motor, so this page isn't built at all and GT can't be switched on from
-        // in-game. The engine and every gt* setting still exist — see the field
-        // comment at the top of this class.
+        // GORILLA TAG — the locomotion-mode picker and the tuning of mode 1, the
+        // Player.cs clone (GtCloneLocomotion). Everything is in Gorilla Tag's own
+        // units: 1 block = 1 metre, speeds in m/s.
         // ====================================================================
-        if (SHOW_GT_PHYSICS_UI) {
-            ConfigCategory gtPage = builder.getOrCreateCategory(Component.literal("GT Physics"));
+        ConfigCategory gtPage = builder.getOrCreateCategory(Component.literal("Gorilla Tag"));
 
-            gtPage.addEntry(eb.startBooleanToggle(Component.literal("GT physics beta (anchor mode)"), MovementConfig.gtPhysics)
-                    .setDefaultValue(pB("gtPhysics"))
-                    .setTooltip(
-                            Component.literal("ON = official GorillaLocomotion algorithm: hands ANCHOR to the spot"),
-                            Component.literal("they touch and your body is dragged 1:1 (Push speed + stickiness ignored)."),
-                            Component.literal("OFF = older speed-based model (swing speed × Push speed)."),
-                            Component.literal("its quite bad if you ask me"))
-                    .setSaveConsumer(v -> MovementConfig.gtPhysics = v).build());
+        gtPage.addEntry(eb.startIntSlider(Component.literal("Locomotion mode"),
+                        (int) MovementConfig.locomotionMode, 0, GorillaLocomotionHandler.MODE_COUNT - 1)
+                .setDefaultValue((int) pD("locomotionMode"))
+                .setTextGetter(v -> Component.literal(GorillaLocomotionHandler.modeName(v)))
+                .setTooltip(
+                        Component.literal("Speed Swing = the classic ViveMonkeCraft movement."),
+                        Component.literal("Gorilla Tag = a clone of Gorilla Tag's own Player.cs: hands stick"),
+                        Component.literal("where they touch, the body moves 1:1, real 9.81 gravity, GT's throw."),
+                        Component.literal("Charge Jump = hold a hand on a surface to charge a launch."))
+                .setSaveConsumer(v -> MovementConfig.locomotionMode = v).build());
 
-            gtPage.addEntry(eb.startDoubleField(Component.literal("Push strength"), MovementConfig.gtPushStrength)
-                    .setDefaultValue(pD("gtPushStrength")).setMin(0.1).setMax(100.0)
-                    .setTooltip(
-                            Component.literal("Body movement = hand movement × this."),
-                            Component.literal("1.0 = authentic Gorilla Tag 1:1, 2.0 = twice as far, 0.5 = half."))
-                    .setSaveConsumer(v -> MovementConfig.gtPushStrength = v).build());
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Jump multiplier"), MovementConfig.gtJumpMultiplier)
+                .setDefaultValue(pD("gtJumpMultiplier")).setMin(0.0).setMax(10.0)
+                .setTooltip(Component.literal("Throw = average body speed × this. Gorilla Tag: 1.1"))
+                .setSaveConsumer(v -> MovementConfig.gtJumpMultiplier = v).build());
 
-            gtPage.addEntry(eb.startDoubleField(Component.literal("Drag gain"), MovementConfig.gtDragGain)
-                    .setDefaultValue(pD("gtDragGain")).setMin(0.05).setMax(100.0)
-                    .setTooltip(
-                            Component.literal("Fraction of the distance to the anchor corrected each tick."),
-                            Component.literal("0.30 = smooth (default), 0.6 = snappier, 0.2 = softer."),
-                            Component.literal("Keep below 1.0 or grabs overshoot and bounce."))
-                    .setSaveConsumer(v -> MovementConfig.gtDragGain = v).build());
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Max jump speed (m/s)"), MovementConfig.gtMaxJumpSpeed)
+                .setDefaultValue(pD("gtMaxJumpSpeed")).setMin(0.0).setMax(60.0)
+                .setTooltip(Component.literal("Throw speed cap. Gorilla Tag: 6.5"))
+                .setSaveConsumer(v -> MovementConfig.gtMaxJumpSpeed = v).build());
 
-            gtPage.addEntry(eb.startDoubleField(Component.literal("Unstick distance (blocks)"), MovementConfig.gtUnstickDistance)
-                    .setDefaultValue(pD("gtUnstickDistance")).setMin(0.2).setMax(3.0)
-                    .setTooltip(
-                            Component.literal("How far a hand may stray from its anchor before the grip releases."),
-                            Component.literal("Official Gorilla Tag uses 1.0."))
-                    .setSaveConsumer(v -> MovementConfig.gtUnstickDistance = v).build());
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Velocity limit (m/s)"), MovementConfig.gtVelocityLimit)
+                .setDefaultValue(pD("gtVelocityLimit")).setMin(0.0).setMax(10.0)
+                .setTooltip(Component.literal("Moving slower than this never throws you. Gorilla Tag: 0.3"))
+                .setSaveConsumer(v -> MovementConfig.gtVelocityLimit = v).build());
 
-            gtPage.addEntry(eb.startDoubleField(Component.literal("Ice slip"), MovementConfig.gtIceSlip)
-                    .setDefaultValue(pD("gtIceSlip")).setMin(0.0).setMax(1.0)
-                    .setTooltip(
-                            Component.literal("How fast an anchor drifts toward the hand on ice."),
-                            Component.literal("0 = ice grips like stone, 0.95 = push off only (default)."))
-                    .setSaveConsumer(v -> MovementConfig.gtIceSlip = v).build());
-        }
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Velocity history (ticks)"), MovementConfig.gtVelocityHistory)
+                .setDefaultValue(pD("gtVelocityHistory")).setMin(1).setMax(20)
+                .setTooltip(Component.literal("Ticks averaged for the throw. 2 ≈ Gorilla Tag's 3 frames."))
+                .setSaveConsumer(v -> MovementConfig.gtVelocityHistory = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Arm length (m)"), MovementConfig.gtArmLength)
+                .setDefaultValue(pD("gtArmLength")).setMin(0.2).setMax(5.0)
+                .setTooltip(Component.literal("Hands are held within this distance of your head. Gorilla Tag: 1.5"))
+                .setSaveConsumer(v -> MovementConfig.gtArmLength = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Hand radius (m)"), MovementConfig.gtHandRadius)
+                .setDefaultValue(pD("gtHandRadius")).setMin(0.01).setMax(0.5)
+                .setTooltip(Component.literal("Size of each hand's collision sphere. Gorilla Tag: 0.05"))
+                .setSaveConsumer(v -> MovementConfig.gtHandRadius = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Gravity (m/s²)"), MovementConfig.gtGravity)
+                .setDefaultValue(pD("gtGravity")).setMin(0.0).setMax(40.0)
+                .setTooltip(Component.literal("Gorilla Tag uses real gravity, 9.81 (Minecraft's is ~32)."))
+                .setSaveConsumer(v -> MovementConfig.gtGravity = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Ground friction"), MovementConfig.gtGroundFriction)
+                .setDefaultValue(pD("gtGroundFriction")).setMin(0.0).setMax(1.0)
+                .setTooltip(Component.literal("Speed kept per tick while standing. 1 = no friction, 0 = instant stop."))
+                .setSaveConsumer(v -> MovementConfig.gtGroundFriction = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Unstick distance (m)"), MovementConfig.gtUnstickDistance)
+                .setDefaultValue(pD("gtUnstickDistance")).setMin(0.2).setMax(3.0)
+                .setTooltip(Component.literal("A stuck hand lets go once it is this far from where it touched. Gorilla Tag: 1.0"))
+                .setSaveConsumer(v -> MovementConfig.gtUnstickDistance = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Ice slip"), MovementConfig.gtIceSlip)
+                .setDefaultValue(pD("gtIceSlip")).setMin(0.0).setMax(1.0)
+                .setTooltip(Component.literal("How much a hand slides along ice. 0 = grips like stone, 1 = frictionless."))
+                .setSaveConsumer(v -> MovementConfig.gtIceSlip = v).build());
 
         //Experimental page For Experimental stuff
         ConfigCategory Experimental = builder.getOrCreateCategory(Component.literal("Experimental"));

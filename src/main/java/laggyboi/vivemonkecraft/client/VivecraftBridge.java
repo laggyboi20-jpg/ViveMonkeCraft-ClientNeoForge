@@ -122,6 +122,73 @@ public final class VivecraftBridge {
     }
 
     // -----------------------------------------------------------------------
+    // Pre-tick world pose (Gorilla Tag clone mode).
+    //
+    // The accessors above read the RENDER pose, which Vivecraft interpolates
+    // between the last two room origins — so right after the body moves it
+    // still reports the old place, a tick or so late. The pre-tick pose is
+    // rebuilt from the CURRENT room origin at the start of each tick, so it
+    // already includes every move made last tick: hands and body agree, and a
+    // 1:1 anchor can't overshoot. It is never touched by VrHandClamp.
+    // Falls back to the render pose if this Vivecraft lacks it.
+    // -----------------------------------------------------------------------
+
+    private Method mPubGetTickPose; // VRClientAPI#getPreTickWorldPose() → VRPose
+    private Field  fVrDataPre;      // VRPlayer#vrdata_world_pre (VRData)
+    private boolean tickPoseWired = false;
+
+    /** {head, main hand, off hand} from the pre-tick world pose, or null. */
+    public Vec3[] getTickPose() {
+        Link link = tryWire();
+        if (!tickPoseWired && (link == Link.PUBLIC || link == Link.LEGACY)) {
+            tickPoseWired = true;
+            try {
+                if (link == Link.PUBLIC) {
+                    mPubGetTickPose = Class.forName("org.vivecraft.api.client.VRClientAPI")
+                            .getMethod("getPreTickWorldPose");
+                } else if (link == Link.LEGACY) {
+                    fVrDataPre = Class.forName("org.vivecraft.client_vr.gameplay.VRPlayer")
+                            .getField("vrdata_world_pre");
+                }
+            } catch (ReflectiveOperationException e) {
+                System.out.println("[ViveMonkeCraft] Vivecraft pre-tick pose unavailable, using render pose: " + e);
+            }
+        }
+        try {
+            if (link == Link.PUBLIC && mPubGetTickPose != null) {
+                Object pose = mPubGetTickPose.invoke(pubApi);
+                if (pose != null) {
+                    Vec3 head = partPos(pose, mPubGetHead);
+                    Vec3 main = partPos(pose, mPubGetMain);
+                    Vec3 off  = partPos(pose, mPubGetOff);
+                    if (head != null && main != null && off != null) return new Vec3[] { head, main, off };
+                }
+            } else if (link == Link.LEGACY && fVrDataPre != null) {
+                Object vrPlayer = mVrPlayerGet.invoke(null);
+                Object vrData   = vrPlayer != null ? fVrDataPre.get(vrPlayer) : null;
+                if (vrData != null) {
+                    Object head = mGetPosition.invoke(fHmd.get(vrData));
+                    Object main = mGetPosition.invoke(fC0.get(vrData));
+                    Object off  = mGetPosition.invoke(fC1.get(vrData));
+                    if (head instanceof Vec3 h && main instanceof Vec3 m && off instanceof Vec3 o) {
+                        return new Vec3[] { h, m, o };
+                    }
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // fall through to the render pose
+        }
+        Vec3 head = getHeadPos(), main = getMainHandPos(), off = getOffHandPos();
+        return (head != null && main != null && off != null) ? new Vec3[] { head, main, off } : null;
+    }
+
+    private Vec3 partPos(Object pose, Method partGetter) throws ReflectiveOperationException {
+        Object part = partGetter.invoke(pose);
+        Object pos  = part != null ? mPubGetPos.invoke(part) : null;
+        return (pos instanceof Vec3 v) ? v : null;
+    }
+
+    // -----------------------------------------------------------------------
     // Controller orientation (hoverboard tilt). Wired separately from the core
     // position API, like teleport-aim below, so a missing method can only
     // disable the hoverboard — never locomotion.
