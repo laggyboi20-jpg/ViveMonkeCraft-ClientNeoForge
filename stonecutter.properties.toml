@@ -1,0 +1,50 @@
+# Per-version settings for every Minecraft version this branch builds.
+# Values in a [version] table override the top-level ones for that version.
+
+mod.id = "vivemonkecraft"
+mod.version = "1.1.0.0"
+mod.archive = "ViveMonkeCraft-NeoForge"
+
+# Cloth Config (NeoForge flavour): every 1.21.x build compiles against the
+# 1.21.4 one, same as the old per-version release branches.
+deps.cloth = "17.0.144"
+
+["1.21.4"]
+deps.neoforge = "21.4.157"
+
+["1.21.5"]
+deps.neoforge = "21.5.98"
+
+["1.21.6"]
+deps.neoforge = "21.6.20-beta"
+
+["1.21.7"]
+deps.neoforge = "21.7.25-beta"
+
+["1.21.8"]
+deps.neoforge = "21.8.54"
+
+["1.21.9"]
+deps.neoforge = "21.9.16-beta"
+
+["1.21.10"]
+deps.neoforge = "21.10.64"
+
+["1.21.11"]
+deps.neoforge = "21.11.45"
+
+["26.1.1"]
+deps.neoforge = "26.1.1.15-beta"
+deps.cloth = "26.1.154"
+
+["26.1.2"]
+deps.neoforge = "26.1.2.94"
+deps.cloth = "26.1.154"
+
+["26.2"]
+deps.neoforge = "26.2.0.43-beta"
+deps.cloth = "26.2.155"
+
+["26.3"]
+deps.neoforge = "26.3.0.88"
+deps.cloth = "26.3.158"

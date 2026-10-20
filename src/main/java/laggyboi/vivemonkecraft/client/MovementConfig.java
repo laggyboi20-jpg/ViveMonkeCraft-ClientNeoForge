@@ -26,7 +26,7 @@ public final class MovementConfig {
 
     // Bumped when defaults change in a way that should override old config files.
     // An older saved version resets to the new defaults once.
-    private static final int CURRENT_CONFIG_VERSION = 18;
+    private static final int CURRENT_CONFIG_VERSION = 17;
 
     // -----------------------------------------------------------------------
     // The tunable values (DEFAULTS until the file is loaded)
@@ -168,27 +168,21 @@ public final class MovementConfig {
     //           so the hand stays planted (position-based, like real Gorilla Tag).
     //           pullStrength is ignored in this mode (1:1 by definition);
     //           wall/floor stickiness are ignored too (anchors always hold, ice slips).
-    //   false = the older speed-based model (body velocity follows hand swing speed
-    //           scaled by pullStrength; stickiness settings apply).
-    // NOTE: superseded by locomotionMode below (kept for the config screen). The
-    // dispatch reads locomotionMode; on an old config, gtPhysics=true is migrated
-    // to locomotionMode = 1 (GT Anchor) once at load.
-    public static boolean gtPhysics = true;
+    //   false = the LEGACY speed-based model (body velocity follows hand swing speed
+    //           scaled by pullStrength; stickiness settings apply). THIS IS THE MODE.
+    //
+    // NOTE: GT anchor mode is no longer exposed in-game — the toggle (and its whole
+    // tuning page) is hidden in ModMenuIntegration and legacy is the one supported
+    // motor. The engine below is left fully intact and still honours this flag, so it
+    // can be re-enabled for testing by hand-editing config/vivemonkecraft.properties
+    // (or by flipping ModMenuIntegration.SHOW_GT_PHYSICS_UI back to true).
+    public static boolean gtPhysics = false;
 
-    // LOCOMOTION MODE — which movement system is active. Index into the mode registry
-    // in GorillaLocomotionHandler. Cycle it live in-headset with the "cycle locomotion
-    // mode" keybind, or set it with /vmc set locomotionMode <n>.
-    //   0 = Speed Swing  (velocity follows hand-swing speed — the classic default)
-    //   1 = GT Anchor    (faithful Gorilla Tag anchor drag)
-    //   2 = Charge Jump  (press a surface, hold to charge, lift to spring off)
-    // Stored as a double (like velocityHistorySize) so /vmc set + the reflection-based
-    // tooling handle it with no special casing.
+    // LOCOMOTION MODE — index into GorillaLocomotionHandler's mode registry.
+    //   0 = Speed Swing, 1 = GT Anchor, 2 = Charge Jump
     public static double locomotionMode = 0;
 
-    // CHARGE JUMP (mode 2) — launch speed (blocks/tick) for a bare TAP vs a FULL hold.
-    // A press ramps linearly from min to max over ~1.5 s; both are still capped by
-    // maxJumpSpeed. Raise chargeMaxLaunch for bigger springs, chargeMinLaunch for a
-    // punchier tap. 1.0 blocks/tick = 20 blocks/s.
+    // CHARGE JUMP (mode 2) — launch speed (blocks/tick) for a bare tap vs full hold.
     public static double chargeMinLaunch = 0.45;
     public static double chargeMaxLaunch = 1.10;
 
@@ -259,6 +253,15 @@ public final class MovementConfig {
     // uses the real tracked hand. true/false.
     public static boolean clampHandModels = true;
 
+    // HAND SURFACE COLLISION — keep Vivecraft's hand MODEL from sinking into blocks
+    // even when NOT gripping. Every tick each free hand is resolved out of any block
+    // it's inside (pushed to the nearest surface) and swept last->current so a fast
+    // swing/fall that tunnels a hand through a block is stopped at the entry face.
+    // This is what keeps the non-pushing hand's model resting ON the ground instead of
+    // buried in it. Purely visual (physics still uses the real tracked hand); requires
+    // clampHandModels. true/false.
+    public static boolean handSurfaceCollision = true;
+
     // EXPERIMENTAL — ICE FLOOR WALL LOGIC: treat grabbing an ICE FLOOR exactly
     // like an ice WALL (gravity on, no anchor glue, pure push-off momentum)
     // instead of the normal slippery-floor handling. Legacy physics only.
@@ -288,6 +291,28 @@ public final class MovementConfig {
     // true/false.
     public static boolean magmaTouchDamage = true;
 
+    // HOVERBOARD (hold the Hoverboard item in either hand). The board works like a
+    // joystick: it thrusts out of its underside, so tilting it 45° forward drives
+    // you forward, tilting it sideways drives you sideways, and holding it level
+    // just hovers. Speed Swing locomotion mode only.
+    public static boolean hoverboardEnabled = true;
+    // Gap kept between your feet and the ground (blocks). Max 0.5: above that,
+    // servers treat you as flying.
+    public static double hoverHeight = 0.4;
+    // Push added per tick at full tilt (45° or more), blocks/tick².
+    public static double hoverAccel = 0.035;
+    // Top board speed (blocks/tick). 0.7 = 14 blocks/sec.
+    public static double hoverMaxSpeed = 0.7;
+    // Speed kept each tick while riding. 1.0 = no drag, 0.9 = stops quickly.
+    public static double hoverDrag = 0.98;
+    // Tilt ignored around level (sine of the angle). 0.12 ≈ 7°.
+    public static double hoverDeadzone = 0.12;
+    // Minimum speed (blocks/tick) to start riding a wall. 0.45 = 9 blocks/sec.
+    public static double hoverWallRideSpeed = 0.45;
+    // Degrees added to the controller's pitch before reading tilt, so "level" can
+    // match how you naturally hold the controller. + tips the board's nose down.
+    public static double hoverTiltOffset = 0.0;
+
     // EXPERIMENTAL — VANILLA ICE FRICTION: when on, gripping/standing on ice makes you
     // skate with VANILLA ice physics (the block's own friction × 0.91 inertia, no speed
     // cap) instead of the mod's frictionless-but-capped ice. Floor/feet only — the
@@ -306,6 +331,10 @@ public final class MovementConfig {
     // true/false.
     public static boolean allowTeleport = false;
 
+    // =====================================================================
+    // 1.0.0.3 FEATURES
+    // =====================================================================
+
     // SURVIVE FATAL FALL — a "last stand": if a fall would KILL you and you were at
     // FULL health when you hit the ground, instead of dying you drop to 1 HP (half a
     // heart, near-death) and lose 3 food. Because you land below full it can't chain —
@@ -319,15 +348,120 @@ public final class MovementConfig {
     // true/false. (Same singleplayer/LAN caveat as above.)
     public static boolean disableFallDamage = false;
 
+    // SINGLE FLOOR GRIP — only ONE hand may grip the FLOOR at a time. Walking with the
+    // gorilla gait means alternating hands; if a trailing hand lightly brushes the
+    // ground it anchors and stops you dead. With this on, while one hand holds the
+    // floor the other hand's floor-touch is ignored (walls/climbing are unaffected —
+    // two hands still work there), so walking flows without snagging. true/false.
+    public static boolean singleFloorGrip = true;
+
+    // GROUNDED GRIP RELEASE — fixes being wedged after jumping straight up with a hand
+    // held in place: when you land back on the ground with a floor-anchored hand, the
+    // anchor keeps dragging you down into the floor and you can't walk until you pull
+    // the hand back. With this on, a FLOOR grip auto-releases once you're standing on
+    // the ground again and no longer pulling yourself anywhere, so you're free to move
+    // without retracting your hand. Walls/climbing are unaffected. true/false.
+    public static boolean groundedGripRelease = true;
+
+    // MOD TOGGLED — persisted on/off state of gorilla locomotion. When false, the
+    // mod will NOT auto-enable on world join even if VR is active. Toggling the
+    // keybind writes this to disk so the choice survives across sessions.
+    public static boolean modToggled = true;
+
     // ACTIVE PRESET — the name of the last preset applied from the Mod Menu screen
     // (or "Default" on first run). The ModMenu reset buttons resolve their target
     // values from THIS preset, and the screen shows it so players know what "reset"
     // will do. Persisted like any other setting. Not a gameplay value.
     public static String activePreset = "Default";
 
+    // COSMETICS — ids of the cosmetics you wear, comma-separated (e.g. pink_hat).
+    // Empty = none. Edited from the Cosmetics page of the config screen.
+    public static String cosmetics = "";
 
-    // NOTE: presets live in ModMenuIntegration (the Mod Menu config screen) — the
-    // old in-class preset system was unused and has been removed.
+
+    public static final String[] PRESET_NAMES = {
+        "Default", "tutorial", "Long Arms", "Zero Gravity", "Speed Run"
+    };
+
+    public static void applyPreset(String preset) {
+        applyDefaultPreset();
+        switch (preset) {
+            case "Default":
+                break;
+            case "tutorial":
+                pullStrength        = 2.5;
+                groundFriction      = 1.0;
+                airFriction         = 0.1;
+                wallStickiness      = 1.0;
+                floorStickiness     = 1.0;
+                minImpulse          = 0.002;
+                handReachMultiplier = 1.0;
+                velocityLimit       = 0.05;
+                jumpMultiplier      = 1.5;
+                maxArmLength        = 3.0;
+                handRadius          = 0.10;
+                hitboxHeightScale   = 0.25;
+                stepAssist          = true;
+                stepTeleport        = true;
+                stepHeight          = 1.5;
+                maxJumpSpeed        = 1.0;
+                velocityHistorySize = 6;
+                gravityMultiplier   = 1.0;
+                showHandMarkers     = true;
+                monkeModel          = true;
+                realMonke           = true;
+                modelTorsoPitch     = -120.0;
+                gtPhysics           = false;
+                break;
+            case "Long Arms":
+                pullStrength        = 2.5;
+                groundFriction      = 0.4;
+                airFriction         = 0.1;
+                wallStickiness      = 0.9;
+                floorStickiness     = 1.0;
+                minImpulse          = 0.002;
+                handReachMultiplier = 3.5;
+                velocityLimit       = 0.05;
+                jumpMultiplier      = 1.8;
+                maxJumpSpeed        = 1.5;
+                velocityHistorySize = 5;
+                gravityMultiplier   = 1.0;
+                showHandMarkers     = true;
+                monkeModel          = true;
+                realMonke           = true;
+                modelTorsoPitch     = -120.0;
+                break;
+            case "Zero Gravity":
+                gravityMultiplier   = 0.1;
+                airFriction         = 0.05;
+                wallStickiness      = 1.0;
+                floorStickiness     = 0.8;
+                pullStrength        = 2.0;
+                jumpMultiplier      = 2.0;
+                maxJumpSpeed        = 2.5;
+                groundFriction      = 0.9;
+                monkeModel          = true;
+                realMonke           = true;
+                modelTorsoPitch     = -120.0;
+                break;
+            case "Speed Run":
+                pullStrength        = 5.0;
+                handReachMultiplier = 1.0;
+                maxArmLength        = 1.5;
+                airFriction         = 0.1;
+                jumpMultiplier      = 3.5;
+                maxJumpSpeed        = 3.0;
+                velocityHistorySize = 4;
+                groundFriction      = 0.7;
+                gravityMultiplier   = 0.9;
+                monkeModel          = true;
+                realMonke           = true;
+                modelTorsoPitch     = -120.0;
+                break;
+            default:
+                break;
+        }
+    }
 
     // -----------------------------------------------------------------------
     // /vmc set <setting> <value> support — every public double/boolean field
@@ -407,18 +541,28 @@ public final class MovementConfig {
         realMonke           = true;
         modelTorsoPitch     = -120.0;
         gtPhysics           = false;
-        locomotionMode      = 0;      // Speed Swing (matches gtPhysics=false)
+        locomotionMode      = 0;
         chargeMinLaunch     = 0.45;
         chargeMaxLaunch     = 1.10;
         punchMining         = true;
         punchMiningThreshold = 0.04;
         punchMiningNoTool   = true;
         magmaTouchDamage    = true;
+        hoverboardEnabled   = true;
+        hoverHeight         = 0.4;
+        hoverAccel          = 0.035;
+        hoverMaxSpeed       = 0.7;
+        hoverDrag           = 0.98;
+        hoverDeadzone       = 0.12;
+        hoverWallRideSpeed  = 0.45;
+        hoverTiltOffset     = 0.0;
         vanillaIceFriction  = false;
         debugLogging        = false;
         allowTeleport       = false;
         surviveFatalFall    = true;
         disableFallDamage   = false;
+        singleFloorGrip     = true;
+        groundedGripRelease = true;
         // Fields the flavour presets don't individually tune — set here too so
         // "Default" is a COMPLETE spec and every ModMenu reset button resolves to a
         // real value (not "whatever it happened to be").
@@ -434,6 +578,7 @@ public final class MovementConfig {
         gtPushStrength      = 1.0;
         cameraHeightOffset  = 0.0;
         clampHandModels     = true;
+        handSurfaceCollision = true;
         iceFloorWallLogic   = false;
         modelTorsoOffsetY   = 0.0;
         modelTorsoScaleY    = 0.75;
@@ -510,9 +655,6 @@ public final class MovementConfig {
                     cameraStabStrength  = parseD(p, "cameraStabStrength",  cameraStabStrength);
                     gripSmoothing       = parseD(p, "gripSmoothing",       gripSmoothing);
                     gtPhysics           = parseB(p, "gtPhysics",           gtPhysics);
-                    // locomotionMode is authoritative for the dispatch. If an older
-                    // config predates it (no key) but had gtPhysics=true, migrate that
-                    // one setting to GT Anchor (mode 1) so behaviour carries over.
                     if (p.getProperty("locomotionMode") == null) {
                         locomotionMode = gtPhysics ? 1 : 0;
                     } else {
@@ -540,14 +682,28 @@ public final class MovementConfig {
                     punchMiningThreshold = parseD(p, "punchMiningThreshold", punchMiningThreshold);
                     punchMiningNoTool   = parseB(p, "punchMiningNoTool",   punchMiningNoTool);
                     magmaTouchDamage    = parseB(p, "magmaTouchDamage",    magmaTouchDamage);
+                    hoverboardEnabled   = parseB(p, "hoverboardEnabled",   hoverboardEnabled);
+                    hoverHeight         = parseD(p, "hoverHeight",         hoverHeight);
+                    hoverAccel          = parseD(p, "hoverAccel",          hoverAccel);
+                    hoverMaxSpeed       = parseD(p, "hoverMaxSpeed",       hoverMaxSpeed);
+                    hoverDrag           = parseD(p, "hoverDrag",           hoverDrag);
+                    hoverDeadzone       = parseD(p, "hoverDeadzone",       hoverDeadzone);
+                    hoverWallRideSpeed  = parseD(p, "hoverWallRideSpeed",  hoverWallRideSpeed);
+                    hoverTiltOffset     = parseD(p, "hoverTiltOffset",     hoverTiltOffset);
                     vanillaIceFriction  = parseB(p, "vanillaIceFriction",  vanillaIceFriction);
                     debugLogging        = parseB(p, "debugLogging",        debugLogging);
                     allowTeleport       = parseB(p, "allowTeleport",       allowTeleport);
                     clampHandModels     = parseB(p, "clampHandModels",     clampHandModels);
+                    handSurfaceCollision = parseB(p, "handSurfaceCollision", handSurfaceCollision);
                     surviveFatalFall    = parseB(p, "surviveFatalFall",    surviveFatalFall);
                     disableFallDamage   = parseB(p, "disableFallDamage",   disableFallDamage);
+                    singleFloorGrip     = parseB(p, "singleFloorGrip",     singleFloorGrip);
+                    groundedGripRelease = parseB(p, "groundedGripRelease", groundedGripRelease);
+                    modToggled          = parseB(p, "modToggled",          modToggled);
                     activePreset        = p.getProperty("activePreset", activePreset).trim();
                 }
+                // Cosmetics aren't a tuning value, so they survive a config-version reset.
+                cosmetics = p.getProperty("cosmetics", cosmetics).trim();
             } else {
                 // FIRST RUN — no config file yet. Start from the curated Default
                 // preset instead of the bare field initializers, then save it.
@@ -678,23 +834,20 @@ public final class MovementConfig {
             sb.append("# The throw/launch on release is unaffected (uses raw velocity).\n");
             sb.append("gripSmoothing=").append(gripSmoothing).append("\n\n");
 
-            sb.append("# GORILLA TAG PHYSICS (anchor mode):\n");
+            sb.append("# GORILLA TAG PHYSICS (anchor mode) - HIDDEN / UNSUPPORTED:\n");
             sb.append("#   true  = official GorillaLocomotion algorithm: a hand ANCHORS to the\n");
             sb.append("#           spot it touches and your body is dragged 1:1 so the hand stays\n");
             sb.append("#           planted. pullStrength + stickiness settings are ignored.\n");
-            sb.append("#   false = older speed-based model (swing speed x pullStrength).\n");
-            sb.append("# NOTE: superseded by locomotionMode below (the dispatch reads that).\n");
+            sb.append("#   false = LEGACY speed-based model (swing speed x pullStrength). DEFAULT.\n");
+            sb.append("# No longer shown in the in-game config screen - legacy is the supported\n");
+            sb.append("# motor. The GT engine is still in the mod, so you can flip this by hand\n");
+            sb.append("# to test it, but it gets no tuning UI and no support.\n");
             sb.append("gtPhysics=").append(gtPhysics).append("\n\n");
 
-            sb.append("# LOCOMOTION MODE: which movement system is active (cycle live with the\n");
-            sb.append("# 'cycle locomotion mode' keybind, or /vmc set locomotionMode <n>).\n");
-            sb.append("#   0 = Speed Swing (classic default)\n");
-            sb.append("#   1 = GT Anchor   (faithful Gorilla Tag anchor drag)\n");
-            sb.append("#   2 = Charge Jump (press a surface, hold to charge, lift to spring off)\n");
+            sb.append("# LOCOMOTION MODE: 0=Speed Swing, 1=GT Anchor, 2=Charge Jump\n");
             sb.append("locomotionMode=").append(locomotionMode).append("\n\n");
 
-            sb.append("# CHARGE JUMP (mode 2): launch speed for a bare TAP vs a FULL ~1.5s hold\n");
-            sb.append("# (blocks/tick, still capped by maxJumpSpeed). 1.0 = 20 blocks/s.\n");
+            sb.append("# CHARGE JUMP (mode 2): launch speed for a tap vs full ~1.5s hold\n");
             sb.append("chargeMinLaunch=").append(chargeMinLaunch).append("\n");
             sb.append("chargeMaxLaunch=").append(chargeMaxLaunch).append("\n\n");
 
@@ -746,7 +899,9 @@ public final class MovementConfig {
             sb.append("# CLAMP HAND MODELS: while gripping, draw the Vivecraft hand model ON the\n");
             sb.append("# block surface instead of inside it (like Gorilla Tag's hand followers).\n");
             sb.append("# Purely visual - physics always uses the real hand. true/false.\n");
-            sb.append("clampHandModels=").append(clampHandModels).append("\n\n");
+            sb.append("clampHandModels=").append(clampHandModels).append("\n");
+            sb.append("# Keep the non-gripping hand model out of blocks (rests on the surface, never sinks in). true/false.\n");
+            sb.append("handSurfaceCollision=").append(handSurfaceCollision).append("\n\n");
 
             sb.append("# EXPERIMENTAL - ICE FLOOR WALL LOGIC: treat ice FLOOR grabs exactly like\n");
             sb.append("# ice WALLS (gravity on, no anchor glue, pure push-off). Legacy physics\n");
@@ -762,6 +917,25 @@ public final class MovementConfig {
             sb.append("punchMiningNoTool=").append(punchMiningNoTool).append("\n\n");
             sb.append("# Grabbing a magma block (any face) hurts you like standing on it. true/false.\n");
             sb.append("magmaTouchDamage=").append(magmaTouchDamage).append("\n\n");
+
+            sb.append("# HOVERBOARD (hold the Hoverboard item). Tilt the board like a joystick:\n");
+            sb.append("# it pushes out of its underside, so 45 degrees forward = full speed ahead.\n");
+            sb.append("# Speed Swing locomotion mode only. true/false.\n");
+            sb.append("hoverboardEnabled=").append(hoverboardEnabled).append("\n");
+            sb.append("# Gap between feet and ground (blocks). Max 0.5 (servers kick flyers).\n");
+            sb.append("hoverHeight=").append(hoverHeight).append("\n");
+            sb.append("# Push per tick at full tilt (blocks/tick^2).\n");
+            sb.append("hoverAccel=").append(hoverAccel).append("\n");
+            sb.append("# Top board speed (blocks/tick). 0.7 = 14 blocks/sec.\n");
+            sb.append("hoverMaxSpeed=").append(hoverMaxSpeed).append("\n");
+            sb.append("# Speed kept per tick while riding. 1.0 = no drag, 0.9 = stops fast.\n");
+            sb.append("hoverDrag=").append(hoverDrag).append("\n");
+            sb.append("# Tilt ignored around level (sine of angle). 0.12 = about 7 degrees.\n");
+            sb.append("hoverDeadzone=").append(hoverDeadzone).append("\n");
+            sb.append("# Speed needed to start riding a wall (blocks/tick). 0.45 = 9 blocks/sec.\n");
+            sb.append("hoverWallRideSpeed=").append(hoverWallRideSpeed).append("\n");
+            sb.append("# Degrees added to controller pitch so 'level' matches your grip.\n");
+            sb.append("hoverTiltOffset=").append(hoverTiltOffset).append("\n\n");
             sb.append("# EXPERIMENTAL - vanilla ice friction on hands/feet (skate physics). true/false.\n");
             sb.append("vanillaIceFriction=").append(vanillaIceFriction).append("\n\n");
             sb.append("# Write a focused Vivecraft-interaction trace to logs/vivemonkecraft-debug.log. true/false.\n");
@@ -769,16 +943,27 @@ public final class MovementConfig {
             sb.append("# Keep Vivecraft teleport usable while the mod is on (it desyncs physics). true/false.\n");
             sb.append("allowTeleport=").append(allowTeleport).append("\n\n");
 
-            sb.append("# Survive an otherwise-fatal fall at 1 HP / half a heart (-3 food) if you were at full\n");
+            sb.append("# Survive an otherwise-fatal fall at 1 HP / half a heart (−3 food) if you were at full\n");
             sb.append("# health. Self-limiting (can't chain). true/false.\n");
             sb.append("surviveFatalFall=").append(surviveFatalFall).append("\n\n");
             sb.append("# Disable fall damage entirely while the mod is on. Overrides surviveFatalFall. true/false.\n");
             sb.append("disableFallDamage=").append(disableFallDamage).append("\n\n");
+            sb.append("# Only one hand can grip the FLOOR at a time — smoother walking (walls unaffected). true/false.\n");
+            sb.append("singleFloorGrip=").append(singleFloorGrip).append("\n\n");
+            sb.append("# Auto-release a floor grip once you're grounded again so you're not wedged after\n");
+            sb.append("# jumping straight up with your hand held in place. true/false.\n");
+            sb.append("groundedGripRelease=").append(groundedGripRelease).append("\n\n");
+
+            sb.append("# Whether gorilla locomotion is toggled on. Persists across sessions — if you\n");
+            sb.append("# turn it off with the keybind, it stays off until you turn it back on.\n");
+            sb.append("modToggled=").append(modToggled).append("\n\n");
 
             sb.append("# The preset the Mod Menu 'reset' buttons revert to (set by picking a preset\n");
             sb.append("# in the config screen). One of: Default, tutorial, Long Arms, Zero Gravity,\n");
             sb.append("# Speed Run. Not a gameplay value.\n");
-            sb.append("activePreset=").append(activePreset).append("\n");
+            sb.append("activePreset=").append(activePreset).append("\n\n");
+            sb.append("# Cosmetics you wear, comma-separated ids (e.g. pink_hat). Empty = none.\n");
+            sb.append("cosmetics=").append(cosmetics).append("\n");
 
             Files.writeString(path, sb.toString());
         } catch (Exception e) {

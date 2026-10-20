@@ -42,6 +42,8 @@ public abstract class FallDamageMixin {
 
     // LivingEntity.calculateFallDamage(double, float) — protected; shadow it so we
     // can predict the incoming damage and decide whether the fall is fatal.
+    // 1.21.5 widened the fall distance from float to double in both methods.
+    //? if >=1.21.5 {
     @Shadow protected abstract int calculateFallDamage(double fallDistance, float damageModifier);
 
     @Inject(
@@ -52,6 +54,18 @@ public abstract class FallDamageMixin {
     )
     private void vmc$fallDamage(double fallDistance, float damageModifier, DamageSource source,
                                 CallbackInfoReturnable<Boolean> cir) {
+    //?} else {
+    /*@Shadow protected abstract int calculateFallDamage(float fallDistance, float damageModifier);
+
+    @Inject(
+        method = "causeFallDamage(FFLnet/minecraft/world/damagesource/DamageSource;)Z",
+        at = @At("HEAD"),
+        cancellable = true,
+        require = 0
+    )
+    private void vmc$fallDamage(float fallDistance, float damageModifier, DamageSource source,
+                                CallbackInfoReturnable<Boolean> cir) {
+    *///?}
         Object self = this;
         if (!(self instanceof Player)) return;
 

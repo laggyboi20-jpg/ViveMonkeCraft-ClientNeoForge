@@ -1,11 +1,17 @@
 package laggyboi.vivemonkecraft.client;
 
+import laggyboi.vivemonkecraft.client.compat.VmcCompat;
+import laggyboi.vivemonkecraft.client.cosmetics.Cosmetics;
+import laggyboi.vivemonkecraft.client.cosmetics.CosmeticsC2SPayload;
+import laggyboi.vivemonkecraft.client.cosmetics.CosmeticsS2CPayload;
 import laggyboi.vivemonkecraft.client.platform.VmcEvents;
 import laggyboi.vivemonkecraft.client.platform.VmcKeybinds;
 import laggyboi.vivemonkecraft.client.platform.VmcNet;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+
+import java.util.List;
 
 // =====================================================================
 // CLIENT CORE — loader-neutral
@@ -54,6 +60,8 @@ public class VivemonkecraftClient {
 
     // Last announced "monke model" (legless look) state.
     private boolean lastMonkeModel = false;
+    // Cosmetics last announced to the server; null = not yet this world.
+    private String lastCosmetics = null;
 
     // Whether we last told a DEDICATED server we're gripping (for the no-fall-damage
     // slide). Tracks state so we send one "released" packet when gripping ends rather
@@ -85,9 +93,6 @@ public class VivemonkecraftClient {
     // the "ViveMonkeCraft: Toggle" keybind to a radial slot.
     // To toggle via keyboard: rebind in Options -> Controls -> Miscellaneous.
     private final KeyMapping toggleKey = VmcKeybinds.TOGGLE;
-
-    // Cycle-locomotion-mode keybind — also unbound by default. Constructed and
-    // registered by VmcKeybinds/VmcBootstrap (registration is loader-specific).
     private final KeyMapping cycleModeKey = VmcKeybinds.CYCLE_MODE;
 
     // Set by init() so the /vmc command (VmcCommands, which has no instance) can
@@ -140,12 +145,12 @@ public class VivemonkecraftClient {
                             handler.onDisable(client);
                         }
                         if (client.player != null) {
-                            client.gui.hud.setOverlayMessage(
+                            VmcCompat.overlay(client,
                                 Component.literal("§e[ViveMonkeCraft] §cDisabled by server"),
                                 false
                             );
                         }
-                    } else if (autoStarted && !enabled) {
+                    } else if (autoStarted && !enabled && MovementConfig.modToggled) {
                         // Authorization arrived AFTER the auto-start window closed
                         // (slow connection) — turn the mod on now.
                         applyEnabled(true);
@@ -156,6 +161,13 @@ public class VivemonkecraftClient {
             // everyone else's (S2C broadcast from monke-server or our own LAN host).
             reg.clientbound(MonkeModelS2CPayload.ID, MonkeModelS2CPayload.STREAM_CODEC,
                 payload -> MonkeModelClientSet.set(payload.player(), payload.enabled()));
+
+            // Cosmetics sync: we announce what we wear (C2S) and receive everyone
+            // else's (S2C broadcast from monke-server or our own LAN host).
+            reg.clientbound(CosmeticsS2CPayload.ID, CosmeticsS2CPayload.STREAM_CODEC,
+                payload -> Cosmetics.setRemote(payload.player(), payload.ids()));
+            reg.serverbound(CosmeticsC2SPayload.ID, CosmeticsC2SPayload.STREAM_CODEC,
+                    EmbeddedServerLogic::onCosmetics);
 
             // Real Monke: C2S request asking monke-server to shrink our hitbox height.
             reg.serverbound(RealMonkeC2SPayload.ID, RealMonkeC2SPayload.STREAM_CODEC,
@@ -190,6 +202,7 @@ public class VivemonkecraftClient {
             warnedNoServerMod = false;
             lastRealMonke     = false;   // re-apply the shrink after the join settles
             lastMonkeModel    = false;   // re-announce the legless look too
+            lastCosmetics     = null;    // and what we wear
         });
 
         // On disconnect: turn off gorilla locomotion, clear server limits, and reset
@@ -206,6 +219,8 @@ public class VivemonkecraftClient {
             wallSlideSent     = false;   // next world starts with no pending grip state
             vrWasActive       = false;   // re-evaluate VR presence fresh next world
             MonkeModelClientSet.clear(); // stale legless flags don't carry over
+            lastCosmetics     = null;
+            Cosmetics.clearRemote();     // nor other players' cosmetics
             ServerLimits.reset();   // clear caps + authorization for the next world
             if (enabled) {
                 enabled = false;
@@ -253,13 +268,10 @@ public class VivemonkecraftClient {
                 // headset). Here we only warn once if the server hasn't opted in.
                 if (!serverAuthorized(client) && !warnedNoServerMod) {
                     warnedNoServerMod = true;
-                    // 26.1 removed Player.displayClientMessage(Component, boolean);
-                    // sendSystemMessage(Component) is the chat-message equivalent (the old
-                    // boolean=false meant "chat, not action bar").
-                    client.player.sendSystemMessage(Component.literal(
+                    VmcCompat.chat(client.player, Component.literal(
                         "§e[ViveMonkeCraft] §cThis server doesn't run the monke-server "
                         + "companion mod, so gorilla locomotion is disabled here. "
-                        + "§7(Server admins: install the ViveMonke server mod to allow it.)"));
+                        + "§7(Server admins: install the ViveMonke server mod to allow it. Download: github.com/laggyboi20-jpg/ViveMonkeCraft-Server)"));
                 }
             }
         }
@@ -273,7 +285,7 @@ public class VivemonkecraftClient {
         if (autoStarted && client.player != null) {
             if (vrActive && !vrWasActive) {
                 VmcDebugLog.event("VR", "headset ACTIVE");
-                if (!enabled && serverAuthorized(client) && ServerLimits.modEnabled) applyEnabled(true);
+                if (!enabled && MovementConfig.modToggled && serverAuthorized(client) && ServerLimits.modEnabled) applyEnabled(true);
             } else if (!vrActive && vrWasActive) {
                 VmcDebugLog.event("VR", "headset INACTIVE");
                 if (enabled) applyEnabled(false);
@@ -289,10 +301,8 @@ public class VivemonkecraftClient {
         while (toggleKey.consumeClick()) {
             toggle();
         }
-
-        // Cycle the active locomotion mode on each press (keyboard or radial menu).
         while (cycleModeKey.consumeClick()) {
-            cycleLocomotionMode(client);
+            cyclePreset(client);
         }
 
         // Dimension change (Nether/End portal, /execute in, etc.) AND respawn after
@@ -308,6 +318,7 @@ public class VivemonkecraftClient {
                     || client.player != lastPlayerRef) {
                 lastRealMonke  = false;
                 lastMonkeModel = false;
+                lastCosmetics  = null;
             }
             lastDimension = dim;
             lastPlayerRef = client.player;
@@ -336,6 +347,16 @@ public class VivemonkecraftClient {
             }
         }
 
+        // Announce what we wear whenever it changes (config screen, /vmc) and once
+        // per world. Independent of the locomotion toggle: hats show either way.
+        // Goes nowhere on servers without monke-server — there only you see yours.
+        String cosmetics = MovementConfig.cosmetics;
+        if (client.player != null && !cosmetics.equals(lastCosmetics)
+                && VmcNet.canSendToServer(CosmeticsC2SPayload.ID)) {
+            lastCosmetics = cosmetics;
+            VmcNet.sendToServer(new CosmeticsC2SPayload(List.copyOf(Cosmetics.equippedIds())));
+        }
+
         boolean grippingNow = false;
         boolean magmaNow    = false;
         if (enabled && client.player != null && !client.isPaused()
@@ -344,7 +365,7 @@ public class VivemonkecraftClient {
             // gorilla locomotion must not move the player. Drop all grips the
             // moment a screen opens, and stay fully inert until it closes — the
             // next tick after closing resumes normally.
-            if (client.gui.screen() != null) {
+            if (VmcCompat.screen(client) != null) {
                 if (!wasInGui) {
                     wasInGui = true;
                     handler.onGuiPause(client);
@@ -431,21 +452,26 @@ public class VivemonkecraftClient {
     // -----------------------------------------------------------------------
 
     private void toggle() {
-        applyEnabled(!enabled);
+        boolean next = !enabled;
+        MovementConfig.modToggled = next;
+        MovementConfig.save();
+        applyEnabled(next);
     }
 
-    // Cycle to the next locomotion mode (wrapping), persist it, and flash it on the
-    // HUD. Resets the handler first (drops grips, restores gravity) so switching mid-
-    // grip can't leave the new mode inheriting the old one's no-gravity / latch state.
-    private void cycleLocomotionMode(Minecraft client) {
-        int next = (((int) MovementConfig.locomotionMode) + 1) % GorillaLocomotionHandler.MODE_COUNT;
-        MovementConfig.locomotionMode = next;
+    private void cyclePreset(Minecraft client) {
+        String[] names = MovementConfig.PRESET_NAMES;
+        int cur = 0;
+        for (int i = 0; i < names.length; i++) {
+            if (names[i].equals(MovementConfig.activePreset)) { cur = i; break; }
+        }
+        int next = (cur + 1) % names.length;
+        MovementConfig.applyPreset(names[next]);
+        MovementConfig.activePreset = names[next];
         MovementConfig.save();
-        handler.onGuiPause(client);   // clean slate for the incoming mode
+        handler.onGuiPause(client);
         if (client.player != null) {
-            client.gui.hud.setOverlayMessage(
-                Component.literal("§e[ViveMonkeCraft] §fMode: §b"
-                    + GorillaLocomotionHandler.modeName(next)),
+            VmcCompat.overlay(client,
+                Component.literal("§e[ViveMonkeCraft] §fPreset: §b" + names[next]),
                 false
             );
         }
@@ -458,7 +484,7 @@ public class VivemonkecraftClient {
         // companion mod, refuse every enable attempt — keybind, /vmc on, auto-start.
         if (on && !serverAuthorized(client)) {
             if (client.player != null) {
-                client.gui.hud.setOverlayMessage(
+                VmcCompat.overlay(client,
                     Component.literal("§e[ViveMonkeCraft] §cThis server doesn't run the monke-server mod"),
                     false
                 );
@@ -470,7 +496,7 @@ public class VivemonkecraftClient {
         // attempt to enable it — keybind, /vmc on, or auto-start all end up here.
         if (on && !ServerLimits.modEnabled) {
             if (client.player != null) {
-                client.gui.hud.setOverlayMessage(
+                VmcCompat.overlay(client,
                     Component.literal("§e[ViveMonkeCraft] §cDisabled by server"),
                     false
                 );
@@ -495,7 +521,7 @@ public class VivemonkecraftClient {
 
             String state = on ? "§aON" : "§cOFF";
             // Show in the action bar (overlay message).
-            client.gui.hud.setOverlayMessage(
+            VmcCompat.overlay(client,
                 Component.literal("§e[ViveMonkeCraft] §fGorilla Locomotion: " + state),
                 false
             );
@@ -506,7 +532,7 @@ public class VivemonkecraftClient {
         MovementConfig.load();
         Minecraft client = Minecraft.getInstance();
         if (client.player != null) {
-            client.gui.hud.setOverlayMessage(
+            VmcCompat.overlay(client,
                 Component.literal("§e[ViveMonkeCraft] §fConfig reloaded"),
                 false
             );

@@ -41,6 +41,10 @@ public final class VmcBootstrap {
         modEventBus.addListener(this::registerPayloads);
         modEventBus.addListener(this::registerKeyMappings);
 
+        // The Hoverboard item (DeferredRegister on the mod bus) + creative tab entry.
+        VmcItems.init(modEventBus);
+        VmcKeybinds.init();
+
         // Config screen: NeoForge's equivalent of Mod Menu's config button. Only
         // offered when Cloth Config is present, exactly as on Fabric.
         //
