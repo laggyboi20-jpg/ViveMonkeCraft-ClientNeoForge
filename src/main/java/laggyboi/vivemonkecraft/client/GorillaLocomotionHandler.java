@@ -1255,6 +1255,21 @@ public class GorillaLocomotionHandler {
     // and primes the trackers so closing the GUI resumes cleanly without
     // tripping the teleport detector on the accumulated position gap.
     public void onGuiPause(Minecraft client) {
+        onGuiPause(client, false);
+    }
+
+    /**
+     * Every tick a menu stays open (after the first, which is onGuiPause(client, true)):
+     * keep riding the mob you stand on in GT mode. Inert otherwise.
+     */
+    public void guiTick(Minecraft client) {
+        if ((int) MovementConfig.locomotionMode != MODE_GT_ANCHOR || client.player == null) return;
+        if (!gtClone.guiTick(client.player)) GtCloneLocomotion.ownsBody = false;
+    }
+
+    // keepRide: a menu opened (not elytra / vehicle / teleport aim) — standing on a
+    // mob in GT mode, you keep riding it instead of being left behind.
+    public void onGuiPause(Minecraft client, boolean keepRide) {
         stopMining(client);
         prevMainOffsetMining = null;
         prevOffOffsetMining  = null;
@@ -1265,8 +1280,12 @@ public class GorillaLocomotionHandler {
         mainHand.wasGripping = false;
         offHand.wasGripping  = false;
         wasAnyGripping  = false;
-        gtClone.reset();
-        GtCloneLocomotion.ownsBody = false;
+        // Standing on a mob in GT mode: keep riding it while the menu is open.
+        if (!(keepRide && (int) MovementConfig.locomotionMode == MODE_GT_ANCHOR
+                && client.player != null && gtClone.guiTick(client.player))) {
+            gtClone.reset();
+            GtCloneLocomotion.ownsBody = false;
+        }
         smoothedGripVel = Vec3.ZERO;
         swingHistory    = null;
         swingAvg        = Vec3.ZERO;

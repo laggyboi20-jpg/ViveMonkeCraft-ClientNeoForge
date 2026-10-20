@@ -371,7 +371,9 @@ public class VivemonkecraftClient {
             if (VmcCompat.screen(client) != null) {
                 if (!wasInGui) {
                     wasInGui = true;
-                    handler.onGuiPause(client);
+                    handler.onGuiPause(client, true);
+                } else {
+                    handler.guiTick(client);   // keep riding a mob you stand on
                 }
             } else {
                 wasInGui = false;

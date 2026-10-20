@@ -6,6 +6,7 @@
   "client": [
     "ArmorLayerMonkeMixin",
     "EntitySuffocationMixin",
+    "EntityCollideMixin",
     "FallDamageMixin",
     "FluidEyeBoxMixin",
     "GtTravelMixin",

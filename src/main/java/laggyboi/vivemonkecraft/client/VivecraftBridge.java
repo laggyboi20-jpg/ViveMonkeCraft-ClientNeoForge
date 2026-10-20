@@ -42,6 +42,41 @@ public final class VivecraftBridge {
         INSTANCE.setTeleportOverride(!disabled);
     }
 
+    /**
+     * Turn the player's VR play space by {@code degrees} (Minecraft yaw sense:
+     * the same direction a mob turns when its yaw grows). Done the way
+     * Vivecraft's own VehicleTracker turns you with a boat or horse: adjust
+     * vrSettings.worldRotation (mirrored into MCVR.seatedRot), and Vivecraft's
+     * postTick rotates the room origin around your head. No-op without Vivecraft.
+     */
+    public static void turnPlaySpace(float degrees) {
+        if (degrees == 0f || turnBroken || !isVrActive()) return;
+        try {
+            if (fTurnSettings == null) {
+                Class<?> holder = Class.forName("org.vivecraft.client_vr.ClientDataHolderVR");
+                mTurnHolder   = holder.getMethod("getInstance");
+                fTurnSettings = holder.getField("vrSettings");
+                fTurnVr       = holder.getField("vr");
+                fTurnWorldRot = fTurnSettings.getType().getField("worldRotation");
+                fTurnSeated   = fTurnVr.getType().getField("seatedRot");
+            }
+            Object dh = mTurnHolder.invoke(null);
+            Object settings = fTurnSettings.get(dh);
+            // VehicleTracker: worldRotation += (oldYaw - newYaw).
+            float rot = (fTurnWorldRot.getFloat(settings) - degrees) % 360f;
+            fTurnWorldRot.setFloat(settings, rot);
+            Object vr = fTurnVr.get(dh);
+            if (vr != null) fTurnSeated.setFloat(vr, rot);
+        } catch (Throwable t) {
+            turnBroken = true;
+            System.out.println("[ViveMonkeCraft] Can't turn the VR play space: " + t);
+        }
+    }
+
+    private static boolean turnBroken = false;
+    private static Method  mTurnHolder;
+    private static Field   fTurnSettings, fTurnVr, fTurnWorldRot, fTurnSeated;
+
     // -----------------------------------------------------------------------
     // Connection lifecycle
     // -----------------------------------------------------------------------

@@ -232,6 +232,11 @@ public final class MovementConfig {
     public static double gtHandRadius      = 0.05;
     public static double gtGravity         = 9.81;
     public static double gtGroundFriction  = 0.6;
+    // GT ENTITY COLLIDERS — hands grab and the body stands on mobs/players
+    // (their hitbox for now), and you ride along when they move.
+    public static boolean gtEntityColliders = true;
+    // ...and your view turns with the mob you stand on (like riding a horse).
+    public static boolean gtEntityTurnWithMob = true;
 
     // REAL MONKE — gorilla size: caps the collision box HEIGHT at 0.5 blocks on
     // both client and server so you fit through 1-block tunnels. Height only —
@@ -604,6 +609,8 @@ public final class MovementConfig {
         gtHandRadius        = 0.05;
         gtGravity           = 9.81;
         gtGroundFriction    = 0.6;
+        gtEntityColliders   = true;
+        gtEntityTurnWithMob = true;
         cameraHeightOffset  = 0.0;
         clampHandModels     = true;
         handSurfaceCollision = true;
@@ -703,6 +710,8 @@ public final class MovementConfig {
                     gtHandRadius        = parseD(p, "gtHandRadius",        gtHandRadius);
                     gtGravity           = parseD(p, "gtGravity",           gtGravity);
                     gtGroundFriction    = parseD(p, "gtGroundFriction",    gtGroundFriction);
+                    gtEntityColliders   = parseB(p, "gtEntityColliders",   gtEntityColliders);
+                    gtEntityTurnWithMob = parseB(p, "gtEntityTurnWithMob", gtEntityTurnWithMob);
                     realMonke           = parseB(p, "realMonke",           realMonke);
                     cameraHeightOffset  = parseD(p, "cameraHeightOffset",  cameraHeightOffset);
                     monkeModel          = parseB(p, "monkeModel",          monkeModel);
@@ -918,7 +927,11 @@ public final class MovementConfig {
             sb.append("gtArmLength=").append(gtArmLength).append("\n");
             sb.append("gtHandRadius=").append(gtHandRadius).append("\n");
             sb.append("gtGravity=").append(gtGravity).append("\n");
-            sb.append("gtGroundFriction=").append(gtGroundFriction).append("\n\n");
+            sb.append("gtGroundFriction=").append(gtGroundFriction).append("\n");
+            sb.append("# Hands grab and the body stands on mobs/players (hitbox); you move with them. true/false.\n");
+            sb.append("gtEntityColliders=").append(gtEntityColliders).append("\n");
+            sb.append("# Your view turns with the mob you stand on. true/false.\n");
+            sb.append("gtEntityTurnWithMob=").append(gtEntityTurnWithMob).append("\n\n");
 
             sb.append("# REAL MONKE: gorilla size - 0.5-block-tall collision box on client AND\n");
             sb.append("# server so you fit 1-block tunnels. Height only - no view drop. true/false.\n");

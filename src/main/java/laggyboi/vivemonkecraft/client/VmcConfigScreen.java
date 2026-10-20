@@ -478,6 +478,16 @@ public final class VmcConfigScreen {
                 .setTooltip(Component.literal("How much a hand slides along ice. 0 = grips like stone, 1 = frictionless."))
                 .setSaveConsumer(v -> MovementConfig.gtIceSlip = v).build());
 
+        gtPage.addEntry(eb.startBooleanToggle(Component.literal("Climb on mobs"), MovementConfig.gtEntityColliders)
+                .setDefaultValue(pB("gtEntityColliders"))
+                .setTooltip(Component.literal("Hands grab and you can stand on mobs and players (their hitbox). You move with them when they walk."))
+                .setSaveConsumer(v -> MovementConfig.gtEntityColliders = v).build());
+
+        gtPage.addEntry(eb.startBooleanToggle(Component.literal("Turn with mobs"), MovementConfig.gtEntityTurnWithMob)
+                .setDefaultValue(pB("gtEntityTurnWithMob"))
+                .setTooltip(Component.literal("While standing on a mob, your view turns when it turns (like riding a horse)."))
+                .setSaveConsumer(v -> MovementConfig.gtEntityTurnWithMob = v).build());
+
         //Experimental page For Experimental stuff
         ConfigCategory Experimental = builder.getOrCreateCategory(Component.literal("Experimental"));
 
