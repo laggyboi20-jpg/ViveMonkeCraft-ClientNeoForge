@@ -39,7 +39,17 @@ public final class VmcKeybinds {
             // KeyMapping.Category record objects.
             KeyMapping.Category.MISC);
 
-    /** No-op on NeoForge — VmcBootstrap registers TOGGLE in RegisterKeyMappingsEvent. */
+    // Cycle-locomotion-mode keybind — also UNBOUND by default. Bind it to a keyboard
+    // key (and optionally a Vivecraft radial slot) to switch movement systems
+    // (Speed Swing -> GT Anchor -> Charge Jump -> ...) live in-headset. Same radial
+    // workflow as TOGGLE; registered by VmcBootstrap in RegisterKeyMappingsEvent.
+    public static final KeyMapping CYCLE_MODE = new KeyMapping(
+            "key.vivemonkecraft.cyclemode",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_UNKNOWN,
+            KeyMapping.Category.MISC);
+
+    /** No-op on NeoForge — VmcBootstrap registers the keybinds in RegisterKeyMappingsEvent. */
     public static void init() {
     }
 }

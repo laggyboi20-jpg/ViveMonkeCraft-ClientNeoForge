@@ -315,15 +315,6 @@ public final class VmcConfigScreen {
                 Component.literal("Purely visual — physics always uses your real hand."))
             .setSaveConsumer(v -> MovementConfig.clampHandModels = v).build());
 
-        visual.addEntry(eb.startBooleanToggle(Component.literal("Hand surface collision (free hands)"), MovementConfig.handSurfaceCollision)
-            .setDefaultValue(pB("handSurfaceCollision"))
-            .setTooltip(
-                Component.literal("Also keeps the hand model out of blocks when NOT gripping, so the"),
-                Component.literal("non-pushing hand rests ON the ground instead of sinking into it."),
-                Component.literal("Swept last->current so fast swings/falls don't bury a hand."),
-                Component.literal("Needs 'Clamp hand models'. Purely visual."))
-            .setSaveConsumer(v -> MovementConfig.handSurfaceCollision = v).build());
-
         visual.addEntry(eb.startBooleanToggle(Component.literal("Real Monke (gorilla size)"), MovementConfig.realMonke)
             .setDefaultValue(pB("realMonke"))
             .setTooltip(
@@ -537,22 +528,6 @@ public final class VmcConfigScreen {
                         Component.literal("Turn off fall damage entirely while the mod is on."),
                         Component.literal("Overrides 'Survive fatal falls'. Singleplayer / LAN host only."))
                 .setSaveConsumer(v -> MovementConfig.disableFallDamage = v).build());
-
-        gameplay.addEntry(eb.startBooleanToggle(Component.literal("Single floor grip (smoother walking)"), MovementConfig.singleFloorGrip)
-                .setDefaultValue(pB("singleFloorGrip"))
-                .setTooltip(
-                        Component.literal("Only one hand can grip the FLOOR at a time, so the trailing hand of"),
-                        Component.literal("your gorilla walk can't accidentally anchor and stop you dead."),
-                        Component.literal("Walls/ceilings are unaffected — two-handed climbing still works."))
-                .setSaveConsumer(v -> MovementConfig.singleFloorGrip = v).build());
-
-        gameplay.addEntry(eb.startBooleanToggle(Component.literal("Grounded grip release"), MovementConfig.groundedGripRelease)
-                .setDefaultValue(pB("groundedGripRelease"))
-                .setTooltip(
-                        Component.literal("Auto-releases a resting floor grip once you're standing on the ground,"),
-                        Component.literal("so you're not wedged after jumping straight up with your hand held in"),
-                        Component.literal("place — no need to pull your hand back before you can walk."))
-                .setSaveConsumer(v -> MovementConfig.groundedGripRelease = v).build());
 
         // -----------------------------------------------------------------
         // HOW-TO — text tutorials (no settings, just guidance)

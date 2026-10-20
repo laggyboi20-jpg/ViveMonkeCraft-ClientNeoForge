@@ -81,5 +81,6 @@ public final class VmcBootstrap {
     @SubscribeEvent
     private void registerKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(VmcKeybinds.TOGGLE);
+        event.register(VmcKeybinds.CYCLE_MODE);
     }
 }

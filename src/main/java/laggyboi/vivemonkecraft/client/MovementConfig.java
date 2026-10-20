@@ -26,7 +26,7 @@ public final class MovementConfig {
 
     // Bumped when defaults change in a way that should override old config files.
     // An older saved version resets to the new defaults once.
-    private static final int CURRENT_CONFIG_VERSION = 16;
+    private static final int CURRENT_CONFIG_VERSION = 18;
 
     // -----------------------------------------------------------------------
     // The tunable values (DEFAULTS until the file is loaded)
@@ -168,15 +168,29 @@ public final class MovementConfig {
     //           so the hand stays planted (position-based, like real Gorilla Tag).
     //           pullStrength is ignored in this mode (1:1 by definition);
     //           wall/floor stickiness are ignored too (anchors always hold, ice slips).
-    //   false = the LEGACY speed-based model (body velocity follows hand swing speed
-    //           scaled by pullStrength; stickiness settings apply). THIS IS THE MODE.
-    //
-    // NOTE: GT anchor mode is no longer exposed in-game — the toggle (and its whole
-    // tuning page) is hidden in ModMenuIntegration and legacy is the one supported
-    // motor. The engine below is left fully intact and still honours this flag, so it
-    // can be re-enabled for testing by hand-editing config/vivemonkecraft.properties
-    // (or by flipping ModMenuIntegration.SHOW_GT_PHYSICS_UI back to true).
-    public static boolean gtPhysics = false;
+    //   false = the older speed-based model (body velocity follows hand swing speed
+    //           scaled by pullStrength; stickiness settings apply).
+    // NOTE: superseded by locomotionMode below (kept for the config screen). The
+    // dispatch reads locomotionMode; on an old config, gtPhysics=true is migrated
+    // to locomotionMode = 1 (GT Anchor) once at load.
+    public static boolean gtPhysics = true;
+
+    // LOCOMOTION MODE — which movement system is active. Index into the mode registry
+    // in GorillaLocomotionHandler. Cycle it live in-headset with the "cycle locomotion
+    // mode" keybind, or set it with /vmc set locomotionMode <n>.
+    //   0 = Speed Swing  (velocity follows hand-swing speed — the classic default)
+    //   1 = GT Anchor    (faithful Gorilla Tag anchor drag)
+    //   2 = Charge Jump  (press a surface, hold to charge, lift to spring off)
+    // Stored as a double (like velocityHistorySize) so /vmc set + the reflection-based
+    // tooling handle it with no special casing.
+    public static double locomotionMode = 0;
+
+    // CHARGE JUMP (mode 2) — launch speed (blocks/tick) for a bare TAP vs a FULL hold.
+    // A press ramps linearly from min to max over ~1.5 s; both are still capped by
+    // maxJumpSpeed. Raise chargeMaxLaunch for bigger springs, chargeMinLaunch for a
+    // punchier tap. 1.0 blocks/tick = 20 blocks/s.
+    public static double chargeMinLaunch = 0.45;
+    public static double chargeMaxLaunch = 1.10;
 
     // STEP TELEPORT: how step assist lifts you over a ledge while airborne.
     //   true  = place you directly on top of the block (instant, never overshoots)
@@ -245,15 +259,6 @@ public final class MovementConfig {
     // uses the real tracked hand. true/false.
     public static boolean clampHandModels = true;
 
-    // HAND SURFACE COLLISION — keep Vivecraft's hand MODEL from sinking into blocks
-    // even when NOT gripping. Every tick each free hand is resolved out of any block
-    // it's inside (pushed to the nearest surface) and swept last->current so a fast
-    // swing/fall that tunnels a hand through a block is stopped at the entry face.
-    // This is what keeps the non-pushing hand's model resting ON the ground instead of
-    // buried in it. Purely visual (physics still uses the real tracked hand); requires
-    // clampHandModels. true/false.
-    public static boolean handSurfaceCollision = true;
-
     // EXPERIMENTAL — ICE FLOOR WALL LOGIC: treat grabbing an ICE FLOOR exactly
     // like an ice WALL (gravity on, no anchor glue, pure push-off momentum)
     // instead of the normal slippery-floor handling. Legacy physics only.
@@ -301,10 +306,6 @@ public final class MovementConfig {
     // true/false.
     public static boolean allowTeleport = false;
 
-    // =====================================================================
-    // 1.0.0.3 FEATURES
-    // =====================================================================
-
     // SURVIVE FATAL FALL — a "last stand": if a fall would KILL you and you were at
     // FULL health when you hit the ground, instead of dying you drop to 1 HP (half a
     // heart, near-death) and lose 3 food. Because you land below full it can't chain —
@@ -317,21 +318,6 @@ public final class MovementConfig {
     // precedence over surviveFatalFall (no damage at all, so nothing to survive).
     // true/false. (Same singleplayer/LAN caveat as above.)
     public static boolean disableFallDamage = false;
-
-    // SINGLE FLOOR GRIP — only ONE hand may grip the FLOOR at a time. Walking with the
-    // gorilla gait means alternating hands; if a trailing hand lightly brushes the
-    // ground it anchors and stops you dead. With this on, while one hand holds the
-    // floor the other hand's floor-touch is ignored (walls/climbing are unaffected —
-    // two hands still work there), so walking flows without snagging. true/false.
-    public static boolean singleFloorGrip = true;
-
-    // GROUNDED GRIP RELEASE — fixes being wedged after jumping straight up with a hand
-    // held in place: when you land back on the ground with a floor-anchored hand, the
-    // anchor keeps dragging you down into the floor and you can't walk until you pull
-    // the hand back. With this on, a FLOOR grip auto-releases once you're standing on
-    // the ground again and no longer pulling yourself anywhere, so you're free to move
-    // without retracting your hand. Walls/climbing are unaffected. true/false.
-    public static boolean groundedGripRelease = true;
 
     // ACTIVE PRESET — the name of the last preset applied from the Mod Menu screen
     // (or "Default" on first run). The ModMenu reset buttons resolve their target
@@ -421,6 +407,9 @@ public final class MovementConfig {
         realMonke           = true;
         modelTorsoPitch     = -120.0;
         gtPhysics           = false;
+        locomotionMode      = 0;      // Speed Swing (matches gtPhysics=false)
+        chargeMinLaunch     = 0.45;
+        chargeMaxLaunch     = 1.10;
         punchMining         = true;
         punchMiningThreshold = 0.04;
         punchMiningNoTool   = true;
@@ -430,8 +419,6 @@ public final class MovementConfig {
         allowTeleport       = false;
         surviveFatalFall    = true;
         disableFallDamage   = false;
-        singleFloorGrip     = true;
-        groundedGripRelease = true;
         // Fields the flavour presets don't individually tune — set here too so
         // "Default" is a COMPLETE spec and every ModMenu reset button resolves to a
         // real value (not "whatever it happened to be").
@@ -447,7 +434,6 @@ public final class MovementConfig {
         gtPushStrength      = 1.0;
         cameraHeightOffset  = 0.0;
         clampHandModels     = true;
-        handSurfaceCollision = true;
         iceFloorWallLogic   = false;
         modelTorsoOffsetY   = 0.0;
         modelTorsoScaleY    = 0.75;
@@ -524,6 +510,16 @@ public final class MovementConfig {
                     cameraStabStrength  = parseD(p, "cameraStabStrength",  cameraStabStrength);
                     gripSmoothing       = parseD(p, "gripSmoothing",       gripSmoothing);
                     gtPhysics           = parseB(p, "gtPhysics",           gtPhysics);
+                    // locomotionMode is authoritative for the dispatch. If an older
+                    // config predates it (no key) but had gtPhysics=true, migrate that
+                    // one setting to GT Anchor (mode 1) so behaviour carries over.
+                    if (p.getProperty("locomotionMode") == null) {
+                        locomotionMode = gtPhysics ? 1 : 0;
+                    } else {
+                        locomotionMode = parseD(p, "locomotionMode", locomotionMode);
+                    }
+                    chargeMinLaunch     = parseD(p, "chargeMinLaunch",     chargeMinLaunch);
+                    chargeMaxLaunch     = parseD(p, "chargeMaxLaunch",     chargeMaxLaunch);
                     stepTeleport        = parseB(p, "stepTeleport",        stepTeleport);
                     gtDragGain          = parseD(p, "gtDragGain",          gtDragGain);
                     gtUnstickDistance   = parseD(p, "gtUnstickDistance",   gtUnstickDistance);
@@ -548,11 +544,8 @@ public final class MovementConfig {
                     debugLogging        = parseB(p, "debugLogging",        debugLogging);
                     allowTeleport       = parseB(p, "allowTeleport",       allowTeleport);
                     clampHandModels     = parseB(p, "clampHandModels",     clampHandModels);
-                    handSurfaceCollision = parseB(p, "handSurfaceCollision", handSurfaceCollision);
                     surviveFatalFall    = parseB(p, "surviveFatalFall",    surviveFatalFall);
                     disableFallDamage   = parseB(p, "disableFallDamage",   disableFallDamage);
-                    singleFloorGrip     = parseB(p, "singleFloorGrip",     singleFloorGrip);
-                    groundedGripRelease = parseB(p, "groundedGripRelease", groundedGripRelease);
                     activePreset        = p.getProperty("activePreset", activePreset).trim();
                 }
             } else {
@@ -685,15 +678,25 @@ public final class MovementConfig {
             sb.append("# The throw/launch on release is unaffected (uses raw velocity).\n");
             sb.append("gripSmoothing=").append(gripSmoothing).append("\n\n");
 
-            sb.append("# GORILLA TAG PHYSICS (anchor mode) - HIDDEN / UNSUPPORTED:\n");
+            sb.append("# GORILLA TAG PHYSICS (anchor mode):\n");
             sb.append("#   true  = official GorillaLocomotion algorithm: a hand ANCHORS to the\n");
             sb.append("#           spot it touches and your body is dragged 1:1 so the hand stays\n");
             sb.append("#           planted. pullStrength + stickiness settings are ignored.\n");
-            sb.append("#   false = LEGACY speed-based model (swing speed x pullStrength). DEFAULT.\n");
-            sb.append("# No longer shown in the in-game config screen - legacy is the supported\n");
-            sb.append("# motor. The GT engine is still in the mod, so you can flip this by hand\n");
-            sb.append("# to test it, but it gets no tuning UI and no support.\n");
+            sb.append("#   false = older speed-based model (swing speed x pullStrength).\n");
+            sb.append("# NOTE: superseded by locomotionMode below (the dispatch reads that).\n");
             sb.append("gtPhysics=").append(gtPhysics).append("\n\n");
+
+            sb.append("# LOCOMOTION MODE: which movement system is active (cycle live with the\n");
+            sb.append("# 'cycle locomotion mode' keybind, or /vmc set locomotionMode <n>).\n");
+            sb.append("#   0 = Speed Swing (classic default)\n");
+            sb.append("#   1 = GT Anchor   (faithful Gorilla Tag anchor drag)\n");
+            sb.append("#   2 = Charge Jump (press a surface, hold to charge, lift to spring off)\n");
+            sb.append("locomotionMode=").append(locomotionMode).append("\n\n");
+
+            sb.append("# CHARGE JUMP (mode 2): launch speed for a bare TAP vs a FULL ~1.5s hold\n");
+            sb.append("# (blocks/tick, still capped by maxJumpSpeed). 1.0 = 20 blocks/s.\n");
+            sb.append("chargeMinLaunch=").append(chargeMinLaunch).append("\n");
+            sb.append("chargeMaxLaunch=").append(chargeMaxLaunch).append("\n\n");
 
             sb.append("# STEP TELEPORT: how step assist lifts you over ledges while airborne.\n");
             sb.append("#   true  = place you directly on top of the block (instant)\n");
@@ -743,9 +746,7 @@ public final class MovementConfig {
             sb.append("# CLAMP HAND MODELS: while gripping, draw the Vivecraft hand model ON the\n");
             sb.append("# block surface instead of inside it (like Gorilla Tag's hand followers).\n");
             sb.append("# Purely visual - physics always uses the real hand. true/false.\n");
-            sb.append("clampHandModels=").append(clampHandModels).append("\n");
-            sb.append("# Keep the non-gripping hand model out of blocks (rests on the surface, never sinks in). true/false.\n");
-            sb.append("handSurfaceCollision=").append(handSurfaceCollision).append("\n\n");
+            sb.append("clampHandModels=").append(clampHandModels).append("\n\n");
 
             sb.append("# EXPERIMENTAL - ICE FLOOR WALL LOGIC: treat ice FLOOR grabs exactly like\n");
             sb.append("# ice WALLS (gravity on, no anchor glue, pure push-off). Legacy physics\n");
@@ -768,16 +769,11 @@ public final class MovementConfig {
             sb.append("# Keep Vivecraft teleport usable while the mod is on (it desyncs physics). true/false.\n");
             sb.append("allowTeleport=").append(allowTeleport).append("\n\n");
 
-            sb.append("# Survive an otherwise-fatal fall at 1 HP / half a heart (−3 food) if you were at full\n");
+            sb.append("# Survive an otherwise-fatal fall at 1 HP / half a heart (-3 food) if you were at full\n");
             sb.append("# health. Self-limiting (can't chain). true/false.\n");
             sb.append("surviveFatalFall=").append(surviveFatalFall).append("\n\n");
             sb.append("# Disable fall damage entirely while the mod is on. Overrides surviveFatalFall. true/false.\n");
             sb.append("disableFallDamage=").append(disableFallDamage).append("\n\n");
-            sb.append("# Only one hand can grip the FLOOR at a time — smoother walking (walls unaffected). true/false.\n");
-            sb.append("singleFloorGrip=").append(singleFloorGrip).append("\n\n");
-            sb.append("# Auto-release a floor grip once you're grounded again so you're not wedged after\n");
-            sb.append("# jumping straight up with your hand held in place. true/false.\n");
-            sb.append("groundedGripRelease=").append(groundedGripRelease).append("\n\n");
 
             sb.append("# The preset the Mod Menu 'reset' buttons revert to (set by picking a preset\n");
             sb.append("# in the config screen). One of: Default, tutorial, Long Arms, Zero Gravity,\n");

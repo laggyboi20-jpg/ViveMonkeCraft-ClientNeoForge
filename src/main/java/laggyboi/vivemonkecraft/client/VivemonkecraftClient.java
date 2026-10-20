@@ -86,6 +86,10 @@ public class VivemonkecraftClient {
     // To toggle via keyboard: rebind in Options -> Controls -> Miscellaneous.
     private final KeyMapping toggleKey = VmcKeybinds.TOGGLE;
 
+    // Cycle-locomotion-mode keybind — also unbound by default. Constructed and
+    // registered by VmcKeybinds/VmcBootstrap (registration is loader-specific).
+    private final KeyMapping cycleModeKey = VmcKeybinds.CYCLE_MODE;
+
     // Set by init() so the /vmc command (VmcCommands, which has no instance) can
     // reach the live handler through the cmd* statics below.
     private static VivemonkecraftClient instance;
@@ -286,6 +290,11 @@ public class VivemonkecraftClient {
             toggle();
         }
 
+        // Cycle the active locomotion mode on each press (keyboard or radial menu).
+        while (cycleModeKey.consumeClick()) {
+            cycleLocomotionMode(client);
+        }
+
         // Dimension change (Nether/End portal, /execute in, etc.) AND respawn after
         // death both REPLACE the player entity, which recomputes its collision box
         // once and caches it — so our Real Monke shrink silently reverts (the model
@@ -423,6 +432,23 @@ public class VivemonkecraftClient {
 
     private void toggle() {
         applyEnabled(!enabled);
+    }
+
+    // Cycle to the next locomotion mode (wrapping), persist it, and flash it on the
+    // HUD. Resets the handler first (drops grips, restores gravity) so switching mid-
+    // grip can't leave the new mode inheriting the old one's no-gravity / latch state.
+    private void cycleLocomotionMode(Minecraft client) {
+        int next = (((int) MovementConfig.locomotionMode) + 1) % GorillaLocomotionHandler.MODE_COUNT;
+        MovementConfig.locomotionMode = next;
+        MovementConfig.save();
+        handler.onGuiPause(client);   // clean slate for the incoming mode
+        if (client.player != null) {
+            client.gui.hud.setOverlayMessage(
+                Component.literal("§e[ViveMonkeCraft] §fMode: §b"
+                    + GorillaLocomotionHandler.modeName(next)),
+                false
+            );
+        }
     }
 
     private void applyEnabled(boolean on) {
