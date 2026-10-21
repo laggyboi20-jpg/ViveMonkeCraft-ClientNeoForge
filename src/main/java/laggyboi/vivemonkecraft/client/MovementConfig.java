@@ -137,17 +137,6 @@ public final class MovementConfig {
     // which is a significant survival advantage on servers.
     public static double gravityMultiplier = 1.0;
 
-    // CAMERA STABILIZATION: draws a black vignette (border that narrows the FOV)
-    // while locomotion velocity is high. Reduces perceived motion and motion sickness.
-    // true/false.
-    public static boolean cameraStabEnabled = true;
-
-    // How strong the vignette is at maximum speed.
-    //   0.0 = invisible (no effect)
-    //   0.5 = moderate tunnel (good starting point)
-    //   1.0 = very strong tunnel vision
-    public static double cameraStabStrength = 0.65;
-
     // GRIP SMOOTHING: low-pass filter on the locomotion velocity produced while you
     // are gripping a surface. VR controllers have ~1-2 mm of inherent tracking noise;
     // at 20 ticks/sec and pullStrength 2.0 that becomes tiny back-and-forth velocity
@@ -162,22 +151,6 @@ public final class MovementConfig {
     // swing velocity so launches don't feel muted.
     public static double gripSmoothing = 0.5;
 
-    // GORILLA TAG PHYSICS (anchor mode):
-    //   true  = faithful port of the official GorillaLocomotion algorithm — a hand
-    //           ANCHORS to the exact spot it touches and your body is dragged 1:1
-    //           so the hand stays planted (position-based, like real Gorilla Tag).
-    //           pullStrength is ignored in this mode (1:1 by definition);
-    //           wall/floor stickiness are ignored too (anchors always hold, ice slips).
-    //   false = the LEGACY speed-based model (body velocity follows hand swing speed
-    //           scaled by pullStrength; stickiness settings apply). THIS IS THE MODE.
-    //
-    // NOTE: GT anchor mode is no longer exposed in-game — the toggle (and its whole
-    // tuning page) is hidden in ModMenuIntegration and legacy is the one supported
-    // motor. The engine below is left fully intact and still honours this flag, so it
-    // can be re-enabled for testing by hand-editing config/vivemonkecraft.properties
-    // (or by flipping ModMenuIntegration.SHOW_GT_PHYSICS_UI back to true).
-    public static boolean gtPhysics = false;
-
     // LOCOMOTION MODE — index into GorillaLocomotionHandler's mode registry.
     //   0 = Speed Swing, 1 = Gorilla Tag (Player.cs clone), 2 = Charge Jump
     public static double locomotionMode = 0;
@@ -185,18 +158,6 @@ public final class MovementConfig {
     // CHARGE JUMP (mode 2) — launch speed (blocks/tick) for a bare tap vs full hold.
     public static double chargeMinLaunch = 0.45;
     public static double chargeMaxLaunch = 1.10;
-
-    // STEP TELEPORT: how step assist lifts you over a ledge while airborne.
-    //   true  = place you directly on top of the block (instant, never overshoots)
-    //   false = old behaviour: an upward velocity boost arcs you over it
-    public static boolean stepTeleport = true;
-
-    // GT DRAG GAIN — fraction of the remaining distance to the anchor corrected
-    // per tick (anchor mode only). Must stay below 1.0: Vivecraft reports hand
-    // positions ~1 tick late, so a full-strength correction overshoots and
-    // oscillates. 0.30 converges smoothly with no bounce; raise toward 0.6
-    // for snappier grabs, lower toward 0.2 for softer ones.
-    public static double gtDragGain = 0.30;
 
     // GT UNSTICK DISTANCE — how far (blocks) a hand may stray from its anchor
     // before the grip releases (Player.cs unStickDistance; 1.0 in official GT).
@@ -296,19 +257,19 @@ public final class MovementConfig {
     // EXPERIMENTAL — PUNCH MINING: break the block your hand touches, but only while
     // holding the tool MEANT for it AND only on ticks where you actually PUNCH it
     // (hand speed into the face above a threshold). Speed gates the damage, so a
-    // gentle grab never mines — you have to strike the block. Off by default.
+    // gentle grab never mines — you have to strike the block. On in the Default preset.
     // true/false.
-    public static Boolean punchMining = false;
+    public static boolean punchMining = false;
 
     // EXPERIMENTAL — PUNCH MINING THRESHOLD: minimum inward hand speed (blocks/tick,
     // measured relative to the head) that counts as a "punch" and deals block damage.
-    // 0.0 = damage on the gentlest touch, higher = you must strike harder. Default 0.08.
+    // 0.0 = damage on the gentlest touch, higher = you must strike harder. Default preset 0.04.
     public static double punchMiningThreshold = 0.08;
 
     // EXPERIMENTAL — PUNCH MINING WITHOUT TOOLS: when true, punch mining no longer
     // requires the matching tool — any item (even bare hands) can break blocks by
     // punching, so hand SPEED alone decides. (Tool-required blocks still won't drop
-    // items without the right tool, exactly like vanilla.) Default false.
+    // items without the right tool, exactly like vanilla.) On in the Default preset.
     public static boolean punchMiningNoTool = false;
 
     // MAGMA TOUCH DAMAGE: grabbing a magma block (any face, including the sides) hurts
@@ -319,7 +280,7 @@ public final class MovementConfig {
     // HOVERBOARD (hold the Hoverboard item in either hand). The board works like a
     // joystick: it thrusts out of its underside, so tilting it 45° forward drives
     // you forward, tilting it sideways drives you sideways, and holding it level
-    // just hovers. Speed Swing locomotion mode only.
+    // just hovers. Speed Swing and Gorilla Tag modes.
     public static boolean hoverboardEnabled = true;
     // Gap kept between your feet and the ground (blocks). Up to 4 in singleplayer
     // or with op; on servers it is held to 0.5 — above that they treat you as flying.
@@ -427,7 +388,6 @@ public final class MovementConfig {
                 handRadius          = 0.10;
                 hitboxHeightScale   = 0.25;
                 stepAssist          = true;
-                stepTeleport        = true;
                 stepHeight          = 1.5;
                 maxJumpSpeed        = 1.0;
                 velocityHistorySize = 6;
@@ -436,7 +396,6 @@ public final class MovementConfig {
                 monkeModel          = true;
                 realMonke           = true;
                 modelTorsoPitch     = -120.0;
-                gtPhysics           = false;
                 break;
             case "Long Arms":
                 pullStrength        = 2.5;
@@ -514,7 +473,9 @@ public final class MovementConfig {
             java.lang.reflect.Field f = MovementConfig.class.getField(name);
             if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())) return null;
             if (f.getType() == double.class) {
-                f.setDouble(null, Double.parseDouble(value.trim()));
+                double d = Double.parseDouble(value.trim());
+                if (!Double.isFinite(d)) return null;   // NaN / Infinity would break the physics
+                f.setDouble(null, d);
             } else if (f.getType() == boolean.class) {
                 String v = value.trim().toLowerCase(java.util.Locale.ROOT);
                 if (!v.equals("true") && !v.equals("false")) return null;
@@ -556,7 +517,6 @@ public final class MovementConfig {
         handRadius          = 0.10;
         hitboxHeightScale   = 0.25;
         stepAssist          = true;
-        stepTeleport        = true;
         stepHeight          = 1.0;
         maxJumpSpeed        = 1.0;
         velocityHistorySize = 6;
@@ -565,7 +525,6 @@ public final class MovementConfig {
         monkeModel          = true;
         realMonke           = true;
         modelTorsoPitch     = -120.0;
-        gtPhysics           = false;
         locomotionMode      = 0;
         chargeMinLaunch     = 0.45;
         chargeMaxLaunch     = 1.10;
@@ -594,10 +553,7 @@ public final class MovementConfig {
         floorStickiness     = 1.0;
         maxArmLength        = 3.0;
         velocityHistorySize = 6;
-        cameraStabEnabled   = true;
-        cameraStabStrength  = 0.65;
         gripSmoothing       = 0.5;
-        gtDragGain          = 0.30;
         gtUnstickDistance   = 1.0;
         gtIceSlip           = 0.95;
         gtPushStrength      = 1.0;
@@ -686,19 +642,15 @@ public final class MovementConfig {
                     floorStickiness     = parseD(p, "floorStickiness",     floorStickiness);
                     airFriction         = parseD(p, "airFriction",         airFriction);
                     gravityMultiplier   = parseD(p, "gravityMultiplier",   gravityMultiplier);
-                    cameraStabEnabled   = parseB(p, "cameraStabEnabled",   cameraStabEnabled);
-                    cameraStabStrength  = parseD(p, "cameraStabStrength",  cameraStabStrength);
                     gripSmoothing       = parseD(p, "gripSmoothing",       gripSmoothing);
-                    gtPhysics           = parseB(p, "gtPhysics",           gtPhysics);
                     if (p.getProperty("locomotionMode") == null) {
-                        locomotionMode = gtPhysics ? 1 : 0;
+                        // Pre-mode-registry files: the old gtPhysics flag picked GT.
+                        locomotionMode = parseB(p, "gtPhysics", false) ? 1 : 0;
                     } else {
                         locomotionMode = parseD(p, "locomotionMode", locomotionMode);
                     }
                     chargeMinLaunch     = parseD(p, "chargeMinLaunch",     chargeMinLaunch);
                     chargeMaxLaunch     = parseD(p, "chargeMaxLaunch",     chargeMaxLaunch);
-                    stepTeleport        = parseB(p, "stepTeleport",        stepTeleport);
-                    gtDragGain          = parseD(p, "gtDragGain",          gtDragGain);
                     gtUnstickDistance   = parseD(p, "gtUnstickDistance",   gtUnstickDistance);
                     gtIceSlip           = parseD(p, "gtIceSlip",           gtIceSlip);
                     gtPushStrength      = parseD(p, "gtPushStrength",      gtPushStrength);
@@ -863,14 +815,6 @@ public final class MovementConfig {
             sb.append("# Change in-game with: /vmc gravity <0-1>  (requires operator access).\n");
             sb.append("gravityMultiplier=").append(gravityMultiplier).append("\n\n");
 
-            sb.append("# CAMERA STABILIZATION: shows a vignette (black border narrowing the view)\n");
-            sb.append("# while moving fast. Reduces motion sickness during locomotion. true/false.\n");
-            sb.append("cameraStabEnabled=").append(cameraStabEnabled).append("\n\n");
-
-            sb.append("# How strong the vignette is at max speed. 0.0 = off, 0.65 = moderate\n");
-            sb.append("# (default), 1.0 = very strong tunnel vision.\n");
-            sb.append("cameraStabStrength=").append(cameraStabStrength).append("\n\n");
-
             sb.append("# GRIP SMOOTHING: low-pass filter on locomotion velocity to remove VR\n");
             sb.append("# controller tracking noise (the tiny jitter that causes motion sickness).\n");
             sb.append("#   0.0 = no smoothing (raw, old behaviour)\n");
@@ -879,32 +823,12 @@ public final class MovementConfig {
             sb.append("# The throw/launch on release is unaffected (uses raw velocity).\n");
             sb.append("gripSmoothing=").append(gripSmoothing).append("\n\n");
 
-            sb.append("# GORILLA TAG PHYSICS (anchor mode) - HIDDEN / UNSUPPORTED:\n");
-            sb.append("#   true  = official GorillaLocomotion algorithm: a hand ANCHORS to the\n");
-            sb.append("#           spot it touches and your body is dragged 1:1 so the hand stays\n");
-            sb.append("#           planted. pullStrength + stickiness settings are ignored.\n");
-            sb.append("#   false = LEGACY speed-based model (swing speed x pullStrength). DEFAULT.\n");
-            sb.append("# No longer shown in the in-game config screen - legacy is the supported\n");
-            sb.append("# motor. The GT engine is still in the mod, so you can flip this by hand\n");
-            sb.append("# to test it, but it gets no tuning UI and no support.\n");
-            sb.append("gtPhysics=").append(gtPhysics).append("\n\n");
-
             sb.append("# LOCOMOTION MODE: 0=Speed Swing, 1=Gorilla Tag clone, 2=Charge Jump\n");
             sb.append("locomotionMode=").append(locomotionMode).append("\n\n");
 
             sb.append("# CHARGE JUMP (mode 2): launch speed for a tap vs full ~1.5s hold\n");
             sb.append("chargeMinLaunch=").append(chargeMinLaunch).append("\n");
             sb.append("chargeMaxLaunch=").append(chargeMaxLaunch).append("\n\n");
-
-            sb.append("# STEP TELEPORT: how step assist lifts you over ledges while airborne.\n");
-            sb.append("#   true  = place you directly on top of the block (instant)\n");
-            sb.append("#   false = old upward velocity boost (arcs you over)\n");
-            sb.append("stepTeleport=").append(stepTeleport).append("\n\n");
-
-            sb.append("# GT DRAG GAIN (anchor mode): fraction of the distance to the anchor\n");
-            sb.append("# corrected per tick. Keep below 1.0 (overshoot/oscillation otherwise).\n");
-            sb.append("# 0.45 default, 0.6 = snappier, 0.3 = softer.\n");
-            sb.append("gtDragGain=").append(gtDragGain).append("\n\n");
 
             sb.append("# GT UNSTICK DISTANCE (anchor mode): how far (blocks) a hand may stray\n");
             sb.append("# from its anchor before the grip releases. Official GT uses 1.0.\n");
@@ -1039,7 +963,8 @@ public final class MovementConfig {
         String v = p.getProperty(key);
         if (v == null) return def;
         try {
-            return Double.parseDouble(v.trim());
+            double d = Double.parseDouble(v.trim());
+            return Double.isFinite(d) ? d : def;   // NaN / Infinity would break the physics
         } catch (NumberFormatException e) {
             return def;
         }

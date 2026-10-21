@@ -34,15 +34,6 @@ public final class VivecraftBridge {
     }
 
     /**
-     * Enable/disable Vivecraft's teleport movement at runtime.
-     * We disable it while gorilla locomotion is active so the teleport button can't
-     * desync the room origin. No-op if Vivecraft is absent.
-     */
-    public static void setTeleportDisabled(boolean disabled) {
-        INSTANCE.setTeleportOverride(!disabled);
-    }
-
-    /**
      * Turn the player's VR play space by {@code degrees} (Minecraft yaw sense:
      * the same direction a mob turns when its yaw grows). Done the way
      * Vivecraft's own VehicleTracker turns you with a boat or horse: adjust
@@ -351,51 +342,6 @@ public final class VivecraftBridge {
         } catch (Throwable t) {
             snapBroken = true;
             VmcDebugLog.log("snapRoomOriginToPlayer FAILED: " + t);
-        }
-    }
-
-    private boolean tpoTried  = false;
-    private boolean tpoBroken = false;
-    private Method  mSetTeleportOverride; // VRPlayer#setTeleportOverride(boolean)
-    private Method  mUpdateTeleportKeys;  // VRPlayer#updateTeleportKeys()
-    private Method  mIsTeleportEnabled;   // VRPlayer#isTeleportEnabled()
-    private Boolean tpoLast = null;
-
-    /**
-     * Set Vivecraft's teleport override and immediately re-apply it.
-     * Setting the flag alone does nothing live — updateTeleportKeys() pushes it
-     * onto the input actions. No-op when Vivecraft isn't present.
-     */
-    public void setTeleportOverride(boolean override) {
-        if (tpoBroken || tryWire() == Link.MISSING) return;
-        try {
-            if (!tpoTried) {
-                tpoTried = true;
-                Class<?> vrPlayerCls = Class.forName("org.vivecraft.client_vr.gameplay.VRPlayer");
-                mSetTeleportOverride = vrPlayerCls.getMethod("setTeleportOverride", boolean.class);
-                mUpdateTeleportKeys  = vrPlayerCls.getMethod("updateTeleportKeys");
-                mIsTeleportEnabled   = vrPlayerCls.getMethod("isTeleportEnabled");
-                if (mVrPlayerGet == null) {
-                    mVrPlayerGet = vrPlayerCls.getMethod("get");
-                }
-                VmcDebugLog.event("VR", "teleport-override reflection wired OK");
-            }
-            Object vp = mVrPlayerGet.invoke(null);
-            if (vp == null) {
-                if (!Boolean.FALSE.equals(tpoLast)) VmcDebugLog.event("VR", "setTeleportOverride: VRPlayer.get() null");
-                return;
-            }
-            mSetTeleportOverride.invoke(vp, override);
-            mUpdateTeleportKeys.invoke(vp);
-            if (tpoLast == null || tpoLast != override) {
-                tpoLast = override;
-                Object enabledNow = mIsTeleportEnabled.invoke(vp);
-                VmcDebugLog.event("VR", "setTeleportOverride(" + override
-                        + ") applied → isTeleportEnabled=" + enabledNow);
-            }
-        } catch (Throwable t) {
-            tpoBroken = true;
-            VmcDebugLog.event("VR", "setTeleportOverride FAILED: " + t);
         }
     }
 

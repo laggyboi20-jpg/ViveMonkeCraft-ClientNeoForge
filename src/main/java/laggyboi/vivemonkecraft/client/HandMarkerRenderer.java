@@ -63,15 +63,6 @@ public final class HandMarkerRenderer {
     }
 
     // =========================================================================
-    // Registration — call once from VivemonkecraftClient.onInitializeClient()
-    // =========================================================================
-
-    public static void register() {
-        // Nothing to register: particles are emitted directly from the physics tick
-        // (see emit), so there's no render hook to wire up.
-    }
-
-    // =========================================================================
     // Emit — called once per game tick by GorillaLocomotionHandler after it has
     // updated the state above. Spawns the marker particles for this frame.
     // =========================================================================

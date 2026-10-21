@@ -1,7 +1,7 @@
 modLoader = "javafml"
 loaderVersion = "[1,)"
 license = "MIT"
-issueTrackerURL = "https://github.com/Laggyboi/ViveMonkeCraft"
+issueTrackerURL = "https://github.com/laggyboi20-jpg/ViveMonkeCraft-ClientNeoForge/issues"
 
 [[mods]]
 modId = "vivemonkecraft"

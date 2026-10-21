@@ -6,6 +6,7 @@ import java.io.BufferedWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -25,6 +26,10 @@ public final class VmcDebugLog {
     private static final DateTimeFormatter TF = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
     private static BufferedWriter writer;
     private static boolean failed = false;
+    private static long written = 0;
+
+    private static final long ROTATE_BYTES      = 20L * 1024 * 1024;
+    private static final long SESSION_MAX_BYTES = 50L * 1024 * 1024;
 
     private VmcDebugLog() {}
 
@@ -45,6 +50,12 @@ public final class VmcDebugLog {
                 Path dir = VmcPlatform.gameDir().resolve("logs");
                 Files.createDirectories(dir);
                 Path file = dir.resolve("vivemonkecraft-debug.log");
+                // Several lines per tick add up fast: start over (keeping one .old
+                // copy) once the file is big, so it can't fill the disk across sessions.
+                if (Files.exists(file) && Files.size(file) > ROTATE_BYTES) {
+                    Files.move(file, dir.resolve("vivemonkecraft-debug.log.old"),
+                            StandardCopyOption.REPLACE_EXISTING);
+                }
                 writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE, StandardOpenOption.APPEND);
                 writer.write("\n==== ViveMonkeCraft debug session " + LocalDateTime.now() + " ====\n");
@@ -53,8 +64,15 @@ public final class VmcDebugLog {
                 // user which versions / mods / settings they had).
                 writer.write(environmentDump());
             }
-            writer.write("[" + LocalDateTime.now().format(TF) + "] " + msg + "\n");
+            String line = "[" + LocalDateTime.now().format(TF) + "] " + msg + "\n";
+            writer.write(line);
             writer.flush();
+            written += line.length();
+            if (written > SESSION_MAX_BYTES) {
+                writer.write("==== log size limit reached, logging stopped for this session ====\n");
+                writer.close();
+                failed = true;
+            }
         } catch (Throwable t) {
             failed = true;   // never let logging break gameplay
         }

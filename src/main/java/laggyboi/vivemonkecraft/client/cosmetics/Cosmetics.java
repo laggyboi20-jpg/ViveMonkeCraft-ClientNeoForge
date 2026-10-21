@@ -132,12 +132,23 @@ public final class Cosmetics {
 
     /** Cosmetics to draw on the given player (you, or someone the sync told us about). */
     public static List<Cosmetic> forPlayer(UUID uuid, boolean isLocal) {
-        if (isLocal) {
+        if (isLocal) return localWorn();
+        return REMOTE.getOrDefault(uuid, List.of());
+    }
+
+    // Called every frame, so the parsed list is cached until the setting changes.
+    private static String localKey = null;
+    private static List<Cosmetic> localList = List.of();
+
+    private static List<Cosmetic> localWorn() {
+        String key = MovementConfig.cosmetics;
+        if (!key.equals(localKey)) {
             List<Cosmetic> out = new ArrayList<>();
             for (String id : equippedIds()) out.add(ALL.get(id));
-            return out;
+            localList = List.copyOf(out);
+            localKey  = key;
         }
-        return REMOTE.getOrDefault(uuid, List.of());
+        return localList;
     }
 
     /** Sets what another player wears (from the sync). Empty or null clears them. */

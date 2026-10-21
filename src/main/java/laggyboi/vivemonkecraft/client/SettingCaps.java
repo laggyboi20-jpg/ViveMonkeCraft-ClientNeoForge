@@ -34,7 +34,7 @@ public final class SettingCaps {
     public static final double MAX_STEP_HEIGHT  = 1.5;  // stepHeight (blocks)
     public static final double MAX_HAND_RADIUS  = 0.15; // handRadius (grab cube size)
     public static final double MIN_GRAVITY      = 1.0;  // gravityMultiplier (1.0 = no reduction)
-    public static final double MIN_AIR_FRICTION = 0.8;  // airFriction (lower = less drag)
+    public static final double MIN_AIR_FRICTION = 0.1;  // airFriction (lower = less drag) — the Default preset value
     public static final double MAX_HOVER_SPEED  = 0.7;  // hoverMaxSpeed (blocks/tick)
     public static final double MAX_HOVER_ACCEL  = 0.05; // hoverAccel (blocks/tick²)
     public static final double MAX_HOVER_HEIGHT = 0.5;  // hoverHeight on servers — see hoverHeight()

@@ -131,21 +131,9 @@ public class GorillaLocomotionHandler {
         // the moment the hand actually swings again or leaves the surface.
         boolean floorGripSuppressed = false;
 
-        // GT ANCHOR MODE ONLY: the REAL hand's world position at the moment of
-        // contact (arm-clamped, NO reach extension). While gripping, the body is
-        // dragged each tick so the real hand returns here — Player.cs
-        // "lastHandPosition". Measured on the REAL hand because the drag must see
-        // surface PENETRATION (pressing into the floor = upward drag = push-off).
-        Vec3    anchor        = null;
-
-        // GT ANCHOR MODE ONLY: the surface-clamped touch point at contact —
-        // used only for the hand marker so the cube sits on the block face.
+        // GORILLA TAG / CHARGE JUMP: the surface point the hand is planted on —
+        // drawn as the hand marker / clamped hand model, and the charge-jump origin.
         Vec3    anchorDisplay = null;
-
-        // GT ANCHOR MODE ONLY: (realHand − head) at contact. Unstick measures
-        // against this so it reflects PHYSICAL hand stray, unaffected by the
-        // push-strength anchor receding.
-        Vec3    gripOffset    = null;
 
         int     latchTicks    = 0;
 
@@ -153,9 +141,7 @@ public class GorillaLocomotionHandler {
             gripping      = false;
             floorGrip     = false;
             prevOffset    = null;
-            anchor        = null;
             anchorDisplay = null;
-            gripOffset    = null;
             latchTicks    = 0;
             // wasGripping intentionally NOT cleared — the grab-end logic needs it this tick
         }
@@ -374,7 +360,12 @@ public class GorillaLocomotionHandler {
         Vec3 rawMain = vr.getMainHandPos();
         Vec3 rawOff  = vr.getOffHandPos();
         Vec3 headPos = vr.getHeadPos();
-        if (rawMain == null || rawOff == null || headPos == null) return;
+        if (rawMain == null || rawOff == null || headPos == null) {
+            // No tracking this tick: don't leave the player floating with gravity off.
+            if (noGravSet) { player.setNoGravity(false); noGravSet = false; }
+            prevTickVel = player.getDeltaMovement();
+            return;
+        }
 
         // Main-hand punch velocity for tool-touch mining: this tick's change in the
         // hand's offset from the head (so body/locomotion motion doesn't read as a
@@ -513,7 +504,7 @@ public class GorillaLocomotionHandler {
         boolean barrierAdjacent = hasBarrierInAABB(client.level,
                 player.getBoundingBox().inflate(0.12, 0, 0.12));
         if (MovementConfig.stepAssist && !barrierAdjacent) {
-            applyStepHeight(player, MovementConfig.stepHeight);
+            applyStepHeight(player, SettingCaps.stepHeight());
         } else {
             restoreStepHeight(player);
         }
@@ -621,7 +612,7 @@ public class GorillaLocomotionHandler {
 
         // Cap so a tracking glitch can't fling you.
         // Also honours the server's maxJumpSpeed limit if one is set.
-        double maxSpd = ServerLimits.maxJumpSpeed(MovementConfig.maxJumpSpeed);
+        double maxSpd = SettingCaps.maxJumpSpeed();
         if (vel.length() > maxSpd) {
             vel = vel.normalize().scale(maxSpd);
         }
@@ -667,7 +658,7 @@ public class GorillaLocomotionHandler {
         double     feetIceMult  = iceBlockMultiplier(client, iceFeetPos);
         boolean    onIce        = feetIceMult > 0.0;
         // iceSpeedCap > 0 signals "feet on ice"; 0 means normal surface.
-        double     effMaxSpd    = ServerLimits.maxJumpSpeed(MovementConfig.maxJumpSpeed);
+        double     effMaxSpd    = SettingCaps.maxJumpSpeed();
         double     iceSpeedCap  = onIce ? effMaxSpd * feetIceMult : 0.0;
 
         // ---- GRAB-POINT ICE (reuses the per-hand multipliers computed up top) ----
@@ -871,7 +862,7 @@ public class GorillaLocomotionHandler {
             // Vanilla adds ~0.08 downward per tick. We cancel (1-g)*0.08 upward,
             // leaving only g*0.08 net gravity. We only do this in the air (onGround
             // handles stopping the fall naturally) and only when g < 1.
-            double g = MovementConfig.gravityMultiplier;
+            double g = SettingCaps.gravityMultiplier();
             // (The hoverboard handles its own drag and gravity while riding.)
             if (g < 1.0 && !player.onGround() && !riding) {
                 double counterGrav = 0.08 * (1.0 - g);
@@ -882,7 +873,7 @@ public class GorillaLocomotionHandler {
             // THROW / JUMP: the moment you let go after swinging fast, fling yourself.
             boolean threw = false;
             if (wasAnyGripping && swingAvg.length() > MovementConfig.velocityLimit) {
-                Vec3 throwVel = swingAvg.scale(MovementConfig.jumpMultiplier);
+                Vec3 throwVel = swingAvg.scale(SettingCaps.jumpMultiplier());
                 if (throwVel.length() > effMaxSpd) {
                     throwVel = throwVel.normalize().scale(effMaxSpd);
                 }
@@ -929,7 +920,7 @@ public class GorillaLocomotionHandler {
             //   af=1.0  → compensate=0.91^0 =1.0    (no change — full vanilla drag)
             //   af=0.5  → compensate=0.91^(-0.5)≈1.048  (partial cancel — longer throws)
             //   af=0.0  → compensate=0.91^(-1) ≈1.099  (full cancel — throws carry forever)
-            double af = MovementConfig.airFriction;
+            double af = SettingCaps.airFriction();
             if (af < 1.0 && !player.onGround() && !riding) {
                 double compensate = Math.pow(0.91, af - 1.0);
                 Vec3 v = player.getDeltaMovement();
@@ -1356,162 +1347,6 @@ public class GorillaLocomotionHandler {
         return true;
     }
 
-    // =========================================================================
-    // GT ANCHOR PHYSICS  (legacy servo — no longer dispatched, kept for reference)
-    // =========================================================================
-    //
-    // Faithful port of the official GorillaLocomotion Player.cs algorithm:
-    //   * On contact a hand ANCHORS at the REAL hand's world position. Each tick
-    //     the body is dragged by (anchor − currentRealHand) × dragGain so the
-    //     hand stays planted — position-based 1:1.
-    //   * gtPushStrength: the anchor RECEDES by (X−1)× the head-relative hand
-    //     swing, so body travel = hand swing × X (X=1 is authentic GT).
-    //   * Two anchored hands average their drags. Ice lets the anchor chase the
-    //     hand (gtIceSlip) — push off, never hold. A hand straying further than
-    //     gtUnstickDistance (physically, head-relative) lets go.
-    //   * THE THROW: commanded velocity is averaged; on release the player is
-    //     flung at avg × jumpMultiplier capped at maxJumpSpeed.
-
-    private void applyGtPhysics(Minecraft client, LocalPlayer player,
-                                 Vec3 touchMain, Vec3 touchOff,
-                                 Vec3 realMain,  Vec3 realOff, Vec3 headPos,
-                                 boolean topFaceMain, boolean topFaceOff,
-                                 double fallSpeed) {
-
-        double effMaxSpd = SettingCaps.maxJumpSpeed();
-
-        Vec3 dragMain = gtProcessHand(client, mainHand, touchMain, realMain, headPos, topFaceMain, fallSpeed);
-        Vec3 dragOff  = gtProcessHand(client, offHand,  touchOff,  realOff,  headPos, topFaceOff,  fallSpeed);
-
-        // SINGLE FLOOR GRIP: never let BOTH hands hold the floor at once. The hand
-        // CLOSEST to the floor (physically lower) stays as the one that pushes you up;
-        // the other floor grip is dropped so two anchors can't fight, double-push, or
-        // snag the walking gait. The dropped hand's MODEL still rests on the surface via
-        // handSurfaceResolve, so it visually "stays on the ground". Walls/ceilings are
-        // untouched, so two-handed climbing still works.
-        if (MovementConfig.singleFloorGrip
-                && mainHand.gripping && mainHand.floorGrip
-                && offHand.gripping  && offHand.floorGrip) {
-            if (realMain.y <= realOff.y) {
-                offHand.release();  dragOff  = Vec3.ZERO;   // main is closer to the floor
-            } else {
-                mainHand.release(); dragMain = Vec3.ZERO;   // off is closer to the floor
-            }
-        }
-
-        int gripCount   = (mainHand.gripping ? 1 : 0) + (offHand.gripping ? 1 : 0);
-        boolean anyGrip = gripCount > 0;
-
-        // EXPERIMENTAL vanilla ice friction — detect an icy floor/grab surface once for
-        // BOTH the gripping (momentum-preserving skate) and free-slide paths below.
-        BlockPos feetPos        = BlockPos.containing(
-                player.getX(), player.getBoundingBox().minY - 0.1, player.getZ());
-        double   iceKeepVanilla = vanillaIceKeep(client, feetPos, touchMain, touchOff);
-        boolean  vanillaIce     = iceKeepVanilla > 0.0;
-
-        // Both hands anchored → average so two hands don't double the drag.
-        Vec3 move = (gripCount == 2) ? dragMain.add(dragOff).scale(0.5)
-                                     : dragMain.add(dragOff);
-
-        // Jitter floor and tracking-glitch cap (same guards as speed mode).
-        if (move.length() < MovementConfig.minImpulse) move = Vec3.ZERO;
-        if (move.length() > effMaxSpd) move = move.normalize().scale(effMaxSpd);
-
-        // PROPORTIONAL SERVO GAIN — deliberately NOT an EMA filter (an EMA keeps
-        // memory of old corrections and re-applies them after the hand reached its
-        // anchor = the suck-in/rebound oscillation). Must stay below 1.0: Vivecraft
-        // reports hand positions ~1 tick late, so full-strength corrections resonate.
-        Vec3 vel = move.scale(Math.max(0.05, Math.min(0.95, MovementConfig.gtDragGain)));
-
-        // Feed the throw average with the velocity we actually command.
-        storeSwing(anyGrip ? vel : Vec3.ZERO);
-
-        if (anyGrip) {
-            // Gripping = in control, no fall damage from the descent (see speed-mode note).
-            player.resetFallDistance();
-            grippingThisTick = true;
-            suppressServerFall(client);
-            // Gripping: gravity off (the anchor holds you), body dragged to anchor.
-            if (!noGravSet) { player.setNoGravity(true); noGravSet = true; }
-
-            // Normally the anchor servo REPLACES velocity with the drag, so gripping an
-            // icy floor kills your glide dead. With vanilla ice on, instead KEEP the
-            // incoming horizontal momentum (block friction × 0.91) and ADD the servo
-            // push on top — so you skate/push off the ice instead of stopping.
-            Vec3 commanded = vel;
-            if (vanillaIce) {
-                Vec3 cur = player.getDeltaMovement();
-                commanded = new Vec3(vel.x + cur.x * iceKeepVanilla, vel.y, vel.z + cur.z * iceKeepVanilla);
-            }
-
-            // Wall-clip guard — zero any axis that would enter solid geometry.
-            player.setDeltaMovement(clampToBlocks(client, player, commanded));
-
-        } else {
-            smoothedGripVel = Vec3.ZERO;
-            if (noGravSet) { player.setNoGravity(false); noGravSet = false; }
-
-            // Gravity multiplier (identical to speed mode).
-            double g = SettingCaps.gravityMultiplier();
-            if (g < 1.0 && !player.onGround()) {
-                double counterGrav = 0.08 * (1.0 - g);
-                Vec3 v = player.getDeltaMovement();
-                player.setDeltaMovement(v.x, v.y + counterGrav, v.z);
-            }
-
-            // THE THROW — Player.cs: velocity = jumpMultiplier × avg, capped.
-            boolean threw = false;
-            if (wasAnyGripping && swingAvg.length() > MovementConfig.velocityLimit) {
-                Vec3 throwVel = swingAvg.scale(SettingCaps.jumpMultiplier());
-                if (throwVel.length() > effMaxSpd) {
-                    throwVel = throwVel.normalize().scale(effMaxSpd);
-                }
-                player.setDeltaMovement(throwVel);
-                threw = true;
-            }
-
-            // Ground friction (ice = frictionless, capped at the ice speed cap).
-            // feetPos / iceKeepVanilla / vanillaIce were computed up top (shared).
-            double   feetIce = iceBlockMultiplier(client, feetPos);
-            boolean  onIce   = feetIce > 0.0;
-            if (!threw && player.onGround()) {
-                double effectiveFriction = vanillaIce
-                        ? iceKeepVanilla
-                        : onIce
-                        ? 1.0
-                        : Math.max(0.0, Math.min(1.0,
-                              MovementConfig.groundFriction * MovementConfig.floorStickiness));
-                if (effectiveFriction < 1.0) {
-                    Vec3 v = player.getDeltaMovement();
-                    player.setDeltaMovement(v.x * effectiveFriction, v.y, v.z * effectiveFriction);
-                }
-                if (onIce && !vanillaIce) {
-                    double iceCap = effMaxSpd * feetIce;
-                    Vec3 v  = player.getDeltaMovement();
-                    double hs = Math.sqrt(v.x * v.x + v.z * v.z);
-                    if (hs > iceCap) {
-                        double sc = iceCap / hs;
-                        player.setDeltaMovement(v.x * sc, v.y, v.z * sc);
-                    }
-                }
-            }
-
-            // Air friction compensation (identical to speed mode).
-            double af = SettingCaps.airFriction();
-            if (af < 1.0 && !player.onGround()) {
-                double compensate = Math.pow(0.91, af - 1.0);
-                Vec3 v = player.getDeltaMovement();
-                player.setDeltaMovement(v.x * compensate, v.y, v.z * compensate);
-            }
-
-            // Step assist while airborne.
-            if (MovementConfig.stepAssist && !player.onGround() && !onIce) {
-                applyLaunchStepBoost(client, player);
-            }
-        }
-        wasAnyGripping = anyGrip;
-    }
-
     // ---- CHARGE-JUMP PHYSICS (MODE_CHARGE_JUMP) ----
     private void applyChargePhysics(Minecraft client, LocalPlayer player,
                                     Vec3 touchMain, Vec3 touchOff,
@@ -1610,90 +1445,6 @@ public class GorillaLocomotionHandler {
         return false;
     }
 
-    // GT per-hand processing: anchor management + drag computation.
-    //   touchHand — surface-clamped, reach-extended point: detects the grab and
-    //               places the visual marker (never used for the drag).
-    //   realHand  — the real controller position, arm-clamped only: the servo
-    //               measures drag = anchor − realHand, so pressing INTO a surface
-    //               produces real penetration depth and therefore real push-off.
-    private Vec3 gtProcessHand(Minecraft client, HandState state,
-                                Vec3 touchHand, Vec3 realHand, Vec3 headPos,
-                                boolean topFace, double fallSpeed) {
-
-        boolean touching = isTouchingBlockFallSweep(client, touchHand, fallSpeed);
-        if (!touching) {
-            state.release();
-            return Vec3.ZERO;
-        }
-
-        if (!state.gripping) {
-            // First contact: plant the anchor at the REAL hand, no movement yet.
-            // (The zero drag this tick stops a fall dead on hand-plant, matching
-            // GT's velocity-zero on touch.)
-            state.gripping      = true;
-            state.floorGrip     = topFace;
-            state.anchor        = realHand;
-            state.anchorDisplay = touchHand;
-            state.prevOffset    = realHand.subtract(headPos);
-            state.gripOffset    = state.prevOffset;
-            return Vec3.ZERO;
-        }
-
-        // PUSH STRENGTH amplification: move the anchor AWAY from the hand by
-        // (X − 1) of this tick's head-relative hand swing, so the body ends up
-        // travelling X× the swing. X = 1.0 leaves the anchor fixed = authentic GT.
-        Vec3 offset = realHand.subtract(headPos);
-        // Head-relative hand motion this tick — the swing you ACTUALLY made with your
-        // arm. It stays ~0 when the hand is held still even as the body moves (both the
-        // hand and the head ride the same play-space), which is exactly how we tell an
-        // intentional pull from a body-displacement artifact below.
-        Vec3 handSwing = offset.subtract(state.prevOffset);
-        double push = SettingCaps.gtPushStrength();
-        if (push != 1.0) {
-            state.anchor = state.anchor.subtract(handSwing.scale(push - 1.0));
-        }
-        state.prevOffset = offset;
-
-        // Drag the body so the REAL hand returns to its anchor. A still hand sits
-        // exactly at its anchor → zero drag → no movement (no phantom suction).
-        Vec3 drag = state.anchor.subtract(realHand);
-
-        // GROUNDED GRIP RELEASE — the "jump straight up, land, then you're wedged until
-        // you pull your hand back" fix. When you rise with your hand held in place the
-        // anchor stays at the floor point, so once you're back on the ground it produces
-        // a big drag that presses you DOWN into the floor / holds you put — but your arm
-        // never actually swung (handSwing ≈ 0), so that drag is a body-displacement
-        // artifact, not a pull. While standing on solid ground with a floor grip and a
-        // still hand, keep only an UPWARD push (so pressing down to hop still works) and
-        // drop the downward/horizontal hold, so you're free to walk without retracting.
-        // An intentional pull (handSwing above the jitter floor) is untouched, so normal
-        // floor locomotion and climbing are unaffected.
-        if (MovementConfig.groundedGripRelease && state.floorGrip
-                && handSwing.length() < MovementConfig.minImpulse
-                && bodyOnSolidGround(client)) {
-            drag = new Vec3(0.0, Math.max(0.0, drag.y), 0.0);
-        }
-
-        // Surface slip (GT Surface.slipPercentage): on ice the anchor chases the
-        // hand — push-offs work, hanging on doesn't.
-        double slip = (iceNearMultiplier(client, touchHand) > 0.0)
-                ? Math.max(0.0, Math.min(1.0, MovementConfig.gtIceSlip)) : 0.0;
-        if (slip > 0.0) {
-            state.anchor = state.anchor.subtract(drag.scale(slip));
-            drag = drag.scale(1.0 - slip);
-        }
-
-        // Unstick (Player.cs unStickDistance): release when the hand has PHYSICALLY
-        // strayed too far from where it grabbed (head-relative, so push-strength
-        // anchor receding doesn't trigger it early).
-        if (offset.subtract(state.gripOffset).length() > MovementConfig.gtUnstickDistance) {
-            state.release();
-            return Vec3.ZERO;
-        }
-
-        return drag;
-    }
-
     // -----------------------------------------------------------------------
     // PER-HAND SWING  — returns the velocity (blocks/tick) this hand contributes
     // -----------------------------------------------------------------------
@@ -1782,7 +1533,7 @@ public class GorillaLocomotionHandler {
         }
 
         // Body moves OPPOSITE to the swing, scaled by pull strength.
-        return swing.scale(-MovementConfig.pullStrength);
+        return swing.scale(-SettingCaps.pullStrength());
     }
 
     // -----------------------------------------------------------------------
@@ -1821,7 +1572,7 @@ public class GorillaLocomotionHandler {
     // passed through on the way down is still caught.
     private boolean isTouchingBlockFallSweep(Minecraft client, Vec3 handPos, double fallSpeed) {
         if (fallSpeed < 0.1) return isTouchingBlock(client, handPos);
-        double r = MovementConfig.handRadius;
+        double r = SettingCaps.handRadius();
         // Extend the AABB upward by the fall speed so the sweep covers the full
         // vertical distance the hand could have skipped over this tick.
         AABB sweepBox = new AABB(
@@ -1934,7 +1685,7 @@ public class GorillaLocomotionHandler {
                 BlockPos.containing(pp.x, player.getBoundingBox().minY - 0.1, pp.z)) > 0.0;
         VmcDebugLog.log(String.format(
             "%-6s mode=%s aim=%-5s cd=%-2d player=(%.2f,%.2f,%.2f) head=%s hOff=%.2f grip=%s/%s vel=(%.3f,%.3f,%.3f) ground=%b ice=%b noGrav=%b",
-            phase, MovementConfig.gtPhysics ? "GT" : "LEG",
+            phase, modeName((int) MovementConfig.locomotionMode).replace(' ', '_'),
             vr.isTeleportAiming(), teleportCooldown,
             pp.x, pp.y, pp.z,
             (hp == null ? "null" : String.format("(%.2f,%.2f,%.2f)", hp.x, hp.y, hp.z)),
@@ -2040,7 +1791,7 @@ public class GorillaLocomotionHandler {
         if (hasBarrierInAABB(mc.level, box.expandTowards(lookX, 0, lookZ))) return;
 
         // Step iteration: find the smallest upward offset that clears the path.
-        double maxStep = MovementConfig.stepHeight;
+        double maxStep = SettingCaps.stepHeight();
         double foundStep = -1;
         for (double dy = 0.0625; dy <= maxStep + 0.01; dy += 0.0625) {
             if (mc.level.noCollision(player,
@@ -2060,7 +1811,7 @@ public class GorillaLocomotionHandler {
         // we get a valid velocity even in near-zero-gravity modes).
         // Multiply by 1.5 for a safety margin — better to slightly overshoot
         // the block top than to barely clip it and fall back.
-        double effG    = Math.max(0.02, 0.08 * MovementConfig.gravityMultiplier);
+        double effG    = Math.max(0.02, 0.08 * SettingCaps.gravityMultiplier());
         double boostY  = Math.sqrt(2.0 * effG * foundStep) * 1.5;
         boostY = Math.max(boostY, 0.15);   // floor so tiny steps still get a kick
         boostY = Math.min(boostY, 0.65);   // cap so launching never rockets the player
@@ -2166,7 +1917,7 @@ public class GorillaLocomotionHandler {
     // -----------------------------------------------------------------------
 
     private AABB handAABB(Vec3 pos) {
-        double r = MovementConfig.handRadius;
+        double r = SettingCaps.handRadius();
         return new AABB(pos.x - r, pos.y - r, pos.z - r, pos.x + r, pos.y + r, pos.z + r);
     }
 
@@ -2189,7 +1940,7 @@ public class GorillaLocomotionHandler {
     // hand passes through them just like the grab detection.
     private Vec3 handSurfaceResolve(Minecraft client, Vec3 hand, Vec3 prevHand) {
         if (client.level == null) return null;
-        double r = MovementConfig.handRadius;
+        double r = SettingCaps.handRadius();
 
         Vec3 lo = (prevHand != null) ? new Vec3(Math.min(hand.x, prevHand.x),
                                                 Math.min(hand.y, prevHand.y),
@@ -2303,14 +2054,14 @@ public class GorillaLocomotionHandler {
     private Vec3 clampArm(Vec3 hand, Vec3 head) {
         Vec3   offset = hand.subtract(head);
         double len    = offset.length();
-        double max    = MovementConfig.maxArmLength;
+        double max    = SettingCaps.maxArmLength();
         return len > max ? head.add(offset.scale(max / len)) : hand;
     }
 
     // Pushes the hand further out along head->hand so you can reach the ground from
     // standing height. Used ONLY for grab detection, not for measuring your swing.
     private Vec3 extendReach(Vec3 hand, Vec3 head) {
-        double m = MovementConfig.handReachMultiplier;
+        double m = SettingCaps.handReach();
         if (m == 1.0) return hand;
         return head.add(hand.subtract(head).scale(m));
     }

@@ -132,7 +132,7 @@ public final class HoverboardHandler {
     private Vec3    lastH = Vec3.ZERO;            // horizontal velocity written last tick (FLOOR)
     private double  lastVy;                       // vertical velocity written last tick (FLOOR), else 0
     private boolean warnedGt = false;
-    private boolean gtPhysics = false;           // Gorilla Tag clone owns the body
+    private boolean gtClone = false;           // Gorilla Tag clone owns the body
 
     /** True while the board is holding you over a floor or wall this tick. */
     public boolean isRiding() {
@@ -149,7 +149,7 @@ public final class HoverboardHandler {
         surface = Surface.NONE;
         boolean wasRide = wallRide;
         wallRide = false;
-        gtPhysics = gtMode;
+        gtClone = gtMode;
 
         InteractionHand hand = p.getMainHandItem().is(VmcItems.hoverboard()) ? InteractionHand.MAIN_HAND
                              : p.getOffhandItem().is(VmcItems.hoverboard())  ? InteractionHand.OFF_HAND
@@ -252,7 +252,7 @@ public final class HoverboardHandler {
                 wallNormal = n;
                 gap        = d;
                 double minSpeed = MovementConfig.hoverWallRideSpeed * (wasRide ? WALL_KEEP : 1.0);
-                Vec3 cur = gtPhysics ? p.getDeltaMovement() : undoVanillaDecay(p);
+                Vec3 cur = gtClone ? p.getDeltaMovement() : undoVanillaDecay(p);
                 wallRide = cur.length() >= minSpeed;
             }
         }

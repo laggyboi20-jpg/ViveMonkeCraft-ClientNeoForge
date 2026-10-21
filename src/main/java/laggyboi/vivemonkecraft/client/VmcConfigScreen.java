@@ -181,13 +181,6 @@ public final class VmcConfigScreen {
         // ====================================================================
         ConfigCategory movement = builder.getOrCreateCategory(Component.literal("Movement"));
 
-        movement.addEntry(eb.startBooleanToggle(Component.literal("Step assist teleports"), MovementConfig.stepTeleport)
-            .setDefaultValue(pB("stepTeleport"))
-            .setTooltip(
-                Component.literal("ON = step assist places you directly on top of the ledge (instant)."),
-                Component.literal("OFF = old behaviour: an upward velocity boost arcs you over it."))
-            .setSaveConsumer(v -> MovementConfig.stepTeleport = v).build());
-
         movement.addEntry(eb.startBooleanToggle(Component.literal("Step assist"), MovementConfig.stepAssist)
                 .setDefaultValue(pB("stepAssist"))
                 .setTooltip(Component.literal("Raise step height so legs stop snagging on block edges."))
@@ -583,7 +576,7 @@ public final class VmcConfigScreen {
                 .setTooltip(
                         Component.literal("Hold the Hoverboard item in either hand and tilt it like a joystick:"),
                         Component.literal("it pushes out of its underside, so 45° forward = full speed ahead."),
-                        Component.literal("Speed Swing locomotion mode only."))
+                        Component.literal("Speed Swing and Gorilla Tag locomotion modes."))
                 .setSaveConsumer(v -> MovementConfig.hoverboardEnabled = v).build());
 
         hover.addEntry(eb.startDoubleField(Component.literal("Hover height"), MovementConfig.hoverHeight)
@@ -653,8 +646,8 @@ public final class VmcConfigScreen {
         howto.addEntry(eb.startTextDescription(Component.literal(
                 "§e§lToggle Monke movement from Vivecraft's radial menu§r\n"
               + "§7ViveMonkeCraft adds a keybind called §f\"ViveMonkeCraft: Toggle\"§7 "
-              + "(id §8key.vivemonkecraft.toggle§7). It is §funbound§7 by default.\n\n"
-              + "§71) First give it a keyboard key: §fOptions → Controls → Key Binds§7, "
+              + "(id §8key.vivemonkecraft.toggle§7). It is bound to §fV§7 by default.\n\n"
+              + "§71) To use a different key: §fOptions → Controls → Key Binds§7, "
               + "find §f\"ViveMonkeCraft: Toggle\"§7 under §fMiscellaneous§7 and bind it to any "
               + "free key (e.g. §fG§7). Vivecraft can only put a KEYBOARD key on a radial slot.\n\n"
               + "§72) Open §fVivecraft Settings → Controls → Radial Menu§7 (or hold the radial-menu "

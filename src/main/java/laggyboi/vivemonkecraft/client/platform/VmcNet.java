@@ -64,15 +64,6 @@ public final class VmcNet {
                 CustomPacketPayload.Type<T> id,
                 StreamCodec<? super FriendlyByteBuf, T> codec,
                 BiConsumer<ServerPlayer, T> handler);
-
-        /**
-         * Client -> server payload with NO handler on this side. Used by the client
-         * mod for packets only the separate server companion answers; the type still
-         * has to be registered so the codec exists for sending.
-         */
-        <T extends CustomPacketPayload> void serverboundNoHandler(
-                CustomPacketPayload.Type<T> id,
-                StreamCodec<? super FriendlyByteBuf, T> codec);
     }
 
     // Buffered until RegisterPayloadHandlersEvent — see the ordering note above.
@@ -114,16 +105,6 @@ public final class VmcNet {
                     }));
         }
 
-        @Override
-        public <T extends CustomPacketPayload> void serverboundNoHandler(
-                CustomPacketPayload.Type<T> id,
-                StreamCodec<? super FriendlyByteBuf, T> codec) {
-            // NeoForge has no "type only" registration — register a no-op handler.
-            // These payloads are answered only by the separate server companion mod,
-            // so nothing on this side should ever receive them anyway.
-            registrar.playToServer(id, cast(codec), (payload, context) -> { });
-        }
-
         // The shared API takes StreamCodec<? super FriendlyByteBuf, T> (what the
         // payload classes declare); NeoForge wants StreamCodec<? super RegistryFriendlyByteBuf, T>.
         // FriendlyByteBuf is a supertype of RegistryFriendlyByteBuf, so any codec
@@ -154,16 +135,22 @@ public final class VmcNet {
         return connection != null && connection.hasChannel(id);
     }
 
-    /** Server -> one client. */
+    /**
+     * Server -> one client. Skipped for players without the mod: NeoForge THROWS
+     * ("Payload ... may not be sent to the client!") when a payload goes to a
+     * connection that never registered its channel — e.g. a friend without
+     * ViveMonkeCraft joining an Open-to-LAN world.
+     */
     public static void sendToPlayer(ServerPlayer player, CustomPacketPayload payload) {
+        if (!player.connection.hasChannel(payload)) return;
         PacketDistributor.sendToPlayer(player, payload);
     }
 
-    /** Server -> every connected client. */
+    /** Server -> every connected client that has the mod. */
     public static void sendToAll(MinecraftServer server, CustomPacketPayload payload) {
         if (server == null) return;
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            PacketDistributor.sendToPlayer(p, payload);
+            sendToPlayer(p, payload);
         }
     }
 }

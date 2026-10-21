@@ -30,8 +30,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 // mod is on:
 //   * disableFallDamage — cancel fall damage outright (wins over survive).
 //   * surviveFatalFall  — a "last stand": if the hit would KILL you AND you were
-//     at FULL health, cancel the fatal damage and instead leave you at half your
-//     hearts, minus 3 food. Landing at half health (not full) means it can't
+//     at FULL health, cancel the fatal damage and instead leave you at 1 HP (half a
+//     heart), minus 3 food. Landing below full health means it can't
 //     chain — it only saves you again once you've healed all the way back.
 //
 // require = 0 so a future Mojang rename of causeFallDamage silently degrades

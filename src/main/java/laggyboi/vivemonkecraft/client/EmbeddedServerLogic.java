@@ -30,6 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 //     the current set to joiners, so all mod users see each other legless.
 //   * receives what each player wears (cosmetics) → same broadcast + replay,
 //     so all mod users see each other's hats.
+//   * receives wall-slide keepalives and magma touches → guests get the same
+//     no-fall-damage slide and hot-hands damage as the host.
 //
 // IMPORTANT: this only runs where an integrated server exists (singleplayer /
 // LAN host). On a DEDICATED server the client mod isn't loaded at all, so these
@@ -50,7 +52,7 @@ public final class EmbeddedServerLogic {
 
     private EmbeddedServerLogic() {}
 
-    // Join/disconnect only — the two PAYLOAD handlers below are wired up by
+    // Join/disconnect only — the PAYLOAD handlers below are wired up by
     // VivemonkecraftClient's VmcNet.register block (the loader needs the payload
     // type and its handler registered together).
     public static void register() {
@@ -100,6 +102,19 @@ public final class EmbeddedServerLogic {
         else                   monkeModelPlayers.remove(id);
         VmcNet.sendToAll(sender.level().getServer(),
                 new MonkeModelS2CPayload(id, payload.enabled()));
+    }
+
+    // Wall slide (LAN guest): the guest sends this every tick it grips, so zeroing
+    // the fall distance per packet is enough — once the packets stop, falling counts
+    // again from that point, exactly like singleplayer.
+    static void onWallSlide(ServerPlayer sender, WallSlideC2SPayload payload) {
+        if (payload.gripping()) sender.resetFallDistance();
+    }
+
+    // Magma touch (LAN guest): sent each tick a hand grips magma; hurt invulnerability
+    // frames throttle it to the same rate as standing on the block.
+    static void onMagmaTouch(ServerPlayer sender, MagmaTouchC2SPayload payload) {
+        sender.hurt(sender.damageSources().hotFloor(), 1.0f);
     }
 
     // Cosmetics: track + broadcast to everyone so all mod users see them.

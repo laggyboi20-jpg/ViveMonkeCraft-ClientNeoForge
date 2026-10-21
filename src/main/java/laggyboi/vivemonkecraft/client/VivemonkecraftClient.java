@@ -87,7 +87,7 @@ public class VivemonkecraftClient {
     // The physics handler.
     private GorillaLocomotionHandler handler;
 
-    // Toggle keybind — UNBOUND by default (no key assigned out of the box).
+    // Toggle keybind (V) and preset-cycle keybind (B) by default.
     // Constructed and registered by VmcKeybinds (registration is loader-specific).
     // To toggle via Vivecraft radial menu: go to VR Settings -> Radial Menu and assign
     // the "ViveMonkeCraft: Toggle" keybind to a radial slot.
@@ -104,12 +104,6 @@ public class VivemonkecraftClient {
 
         instance = this;
         handler  = new GorillaLocomotionHandler();
-
-        // Register the per-frame hand marker renderer (replaces old particles).
-        HandMarkerRenderer.register();
-
-        // Register the camera stabilization vignette (motion-sickness reduction).
-        CameraStabilizationRenderer.register();
 
         // The 3D hoverboard drawn in hand (items/hoverboard.json points at it).
         HoverboardModel.register();
@@ -153,9 +147,11 @@ public class VivemonkecraftClient {
                                 false
                             );
                         }
-                    } else if (autoStarted && !enabled && MovementConfig.modToggled) {
+                    } else if (autoStarted && !enabled && MovementConfig.modToggled
+                            && VivecraftBridge.isVrActive()) {
                         // Authorization arrived AFTER the auto-start window closed
-                        // (slow connection) — turn the mod on now.
+                        // (slow connection) — turn the mod on now (VR only, same as
+                        // the headset watcher in onEndTick).
                         applyEnabled(true);
                     }
                 });
@@ -180,17 +176,17 @@ public class VivemonkecraftClient {
             reg.serverbound(MonkeModelC2SPayload.ID, MonkeModelC2SPayload.STREAM_CODEC,
                     EmbeddedServerLogic::onMonkeModel);
 
-            // Wall slide: C2S keepalive telling monke-server we're gripping, so it zeroes
-            // our (server-authoritative) fall distance — the dedicated-server half of the
-            // no-fall-damage slide. Singleplayer/LAN host handles this in the handler by
-            // resetting the integrated server player directly, so it's dedicated-only and
-            // needs no handler on this side.
-            reg.serverboundNoHandler(WallSlideC2SPayload.ID, WallSlideC2SPayload.STREAM_CODEC);
+            // Wall slide: C2S keepalive telling the server we're gripping, so it zeroes
+            // our (server-authoritative) fall distance — the no-fall-damage slide for
+            // anyone who isn't the host. The host itself resets its integrated server
+            // player directly in the handler; LAN guests are handled by the host here.
+            reg.serverbound(WallSlideC2SPayload.ID, WallSlideC2SPayload.STREAM_CODEC,
+                    EmbeddedServerLogic::onWallSlide);
 
-            // Magma touch: C2S signal telling monke-server to apply hot-floor damage while
-            // a hand grips a magma block (server-authoritative, so dedicated-only —
-            // singleplayer hurts the integrated server player directly in the handler).
-            reg.serverboundNoHandler(MagmaTouchC2SPayload.ID, MagmaTouchC2SPayload.STREAM_CODEC);
+            // Magma touch: C2S signal asking the server to apply hot-floor damage while a
+            // hand grips a magma block (server-authoritative). Same split as wall slide.
+            reg.serverbound(MagmaTouchC2SPayload.ID, MagmaTouchC2SPayload.STREAM_CODEC,
+                    EmbeddedServerLogic::onMagmaTouch);
         });
 
         // Join/disconnect handlers for our own integrated server (LAN host role).
@@ -219,6 +215,7 @@ public class VivemonkecraftClient {
             lastMonkeModel    = false;
             wasInGui          = false;
             lastDimension     = null;
+            lastPlayerRef     = null;    // don't keep the old world alive via its player
             wallSlideSent     = false;   // next world starts with no pending grip state
             vrWasActive       = false;   // re-evaluate VR presence fresh next world
             MonkeModelClientSet.clear(); // stale legless flags don't carry over
