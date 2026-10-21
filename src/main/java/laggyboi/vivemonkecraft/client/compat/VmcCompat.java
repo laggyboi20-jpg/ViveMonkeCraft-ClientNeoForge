@@ -3,7 +3,9 @@ package laggyboi.vivemonkecraft.client.compat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.InteractionHand;
 //? if >=26.3
 import net.minecraft.world.item.component.SwingAnimation;
@@ -45,6 +47,19 @@ public final class VmcCompat {
         //?} else {
         /*player.displayClientMessage(message, false);
         *///?}
+    }
+
+    /** A chat link: underlined text that opens {@code url} when clicked. */
+    public static MutableComponent link(String text, String url) {
+        //? if >=1.21.5 {
+        ClickEvent click = new ClickEvent.OpenUrl(java.net.URI.create(url));
+        //?} else {
+        /*ClickEvent click = new ClickEvent(ClickEvent.Action.OPEN_URL, url);
+        *///?}
+        return Component.literal(text).withStyle(s -> s
+            .withClickEvent(click)
+            .withUnderlined(true)
+            .withColor(net.minecraft.ChatFormatting.AQUA));
     }
 
     /** Operator-level permission (level 2): singleplayer with cheats, or op on a server. */

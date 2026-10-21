@@ -255,6 +255,18 @@ public class VivemonkecraftClient {
     // Per-tick: keybind handling + physics
     // -----------------------------------------------------------------------
 
+    private static final String ISSUE_TRACKER =
+        "https://github.com/laggyboi20-jpg/ViveMonkeCraft-ClientNeoForge/issues";
+
+    /** Join notice, Gorilla-Tag style: shown only in your own chat, never sent to the server. */
+    private static void sendFeedbackNotice(Minecraft client) {
+        VmcCompat.chat(client.player, Component.literal("§e[ViveMonkeCraft] §fIf you find any bugs report here ")
+            .append(VmcCompat.link("(Issue tracker)", ISSUE_TRACKER))
+            .append(Component.literal(" §for if you have gameplay ideas to add go to "))
+            .append(VmcCompat.link("(Issue tracker)", ISSUE_TRACKER))
+            .append(Component.literal(" §fand tell them there!")));
+    }
+
     private void onEndTick(Minecraft client) {
         // Auto-start: wait PACKET_WAIT_TICKS ticks after joining so the server's
         // config packet has time to arrive before we decide to enable.
@@ -267,6 +279,7 @@ public class VivemonkecraftClient {
             ticksSinceJoin++;
             if (ticksSinceJoin >= PACKET_WAIT_TICKS) {
                 autoStarted = true;
+                sendFeedbackNotice(client);
                 // Actually enabling is handled by the VR watcher below (it requires a
                 // headset). Here we only warn once if the server hasn't opted in.
                 if (!serverAuthorized(client) && !warnedNoServerMod) {
