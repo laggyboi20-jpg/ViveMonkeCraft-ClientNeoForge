@@ -7,6 +7,7 @@ import java.util.Map;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
+import me.shedaniel.clothconfig2.gui.entries.BooleanListEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -35,6 +36,10 @@ public final class VmcConfigScreen {
     // The active preset's value for every field, captured at screen-build time.
     // Each entry's setDefaultValue (= what its reset arrow reverts to) reads from here.
     private Map<String, Object> presetVals;
+
+    // Links the Speed Swing / Gorilla Tag / Charge Jump on-off switches.
+    // Created in buildScreen, after the config file is re-read.
+    private ModeSwitch modes;
 
     // Reset-target getters — pull the active preset's value for a field by name.
     private double pD(String key) {
@@ -82,6 +87,7 @@ public final class VmcConfigScreen {
         } finally {
             MovementConfig.restore(current);
         }
+        modes = new ModeSwitch((int) pD("locomotionMode"));
 
         // Has the player tweaked away from the active preset? (drives the "(customized)"
         // tag so they know reset won't reproduce their current values exactly).
@@ -121,6 +127,8 @@ public final class VmcConfigScreen {
         // and record it as the new active preset (so the reset arrows follow it next
         // time the screen opens).
         builder.setSavingRunnable(() -> {
+            // Before the preset: a preset picks its own mode and must win.
+            MovementConfig.locomotionMode = modes.resolve();
             if (!pendingPreset[0].equals("— None —")) {
                 MovementConfig.applyPreset(pendingPreset[0]);
                 MovementConfig.activePreset = pendingPreset[0];
@@ -129,6 +137,7 @@ public final class VmcConfigScreen {
         });
 
         ConfigEntryBuilder eb = builder.entryBuilder();
+
 
         // ====================================================================
         // PRESETS — choose a preset from the dropdown and hit Save to apply.
@@ -164,8 +173,8 @@ public final class VmcConfigScreen {
                 .setSuggestionMode(false)
                 .setTooltip(
                     Component.literal("tutorial    — Use this if you find it hard to move with default."),
-                    Component.literal("Default     — Reset all settings to factory defaults."),
-                    Component.literal("Gorilla Tag — Authentic GT feel: stronger throws, less air drag."),
+                    Component.literal("Default     — Reset all settings to factory defaults (Gorilla Tag mode)."),
+                    Component.literal("Long Arms   — Very long reach (Speed Swing)."),
                     Component.literal("Zero Gravity— Float after letting go; space-like movement."),
                     Component.literal("Speed Run   — Very powerful launches, low air drag.")
                 )
@@ -177,26 +186,27 @@ public final class VmcConfigScreen {
 
 
         // ====================================================================
-        // MOVEMENT
+        // SPEED SWING — locomotion mode 0. Its on/off switch sits at the top and is
+        // linked with the Gorilla Tag and Charge Jump switches (one mode at a time).
         // ====================================================================
-        ConfigCategory movement = builder.getOrCreateCategory(Component.literal("Movement"));
+        ConfigCategory swing = builder.getOrCreateCategory(Component.literal("Speed Swing"));
 
-        movement.addEntry(eb.startBooleanToggle(Component.literal("Step assist"), MovementConfig.stepAssist)
-                .setDefaultValue(pB("stepAssist"))
-                .setTooltip(Component.literal("Raise step height so legs stop snagging on block edges."))
-                .setSaveConsumer(v -> MovementConfig.stepAssist = v).build());
+        swing.addEntry(modes.toggle(eb, GorillaLocomotionHandler.MODE_SPEED_SWING, "Speed Swing movement",
+                Component.literal("The classic ViveMonkeCraft movement: your body moves opposite to how"),
+                Component.literal("FAST your hand swings while it touches a block. Everything below tunes it."),
+                Component.literal("Turning this ON turns Gorilla Tag (and Charge Jump) OFF.")));
 
-        movement.addEntry(eb.startDoubleField(Component.literal("Push speed"), MovementConfig.pullStrength)
+        swing.addEntry(eb.startDoubleField(Component.literal("Push speed"), MovementConfig.pullStrength)
             .setDefaultValue(pD("pullStrength")).setMin(0.0).setMax(8.0)
-            .setTooltip(Component.literal("How strongly your swing moves you. 1.0 = 1:1, higher = faster. (Ignored in anchor mode — that is always 1:1.)"))
+            .setTooltip(Component.literal("How strongly your swing moves you. 1.0 = 1:1, higher = faster. (Speed Swing only.)"))
             .setSaveConsumer(v -> MovementConfig.pullStrength = v).build());
 
-        movement.addEntry(eb.startDoubleField(Component.literal("Ground friction (anti-slide)"), MovementConfig.groundFriction)
+        swing.addEntry(eb.startDoubleField(Component.literal("Ground friction (anti-slide)"), MovementConfig.groundFriction)
             .setDefaultValue(pD("groundFriction")).setMin(0.0).setMax(1.0)
             .setTooltip(Component.literal("1.0 = slide forever, 0.5 = stops fast, 0.2 = near-instant."))
             .setSaveConsumer(v -> MovementConfig.groundFriction = v).build());
 
-        movement.addEntry(eb.startDoubleField(Component.literal("Air friction"), MovementConfig.airFriction)
+        swing.addEntry(eb.startDoubleField(Component.literal("Air friction"), MovementConfig.airFriction)
             .setDefaultValue(pD("airFriction")).setMin(0.0).setMax(1.0)
             .setTooltip(
                 Component.literal("How much horizontal speed bleeds off while airborne and NOT gripping."),
@@ -206,77 +216,57 @@ public final class VmcConfigScreen {
             )
             .setSaveConsumer(v -> MovementConfig.airFriction = v).build());
 
-        movement.addEntry(eb.startDoubleField(Component.literal("Wall stickiness"), MovementConfig.wallStickiness)
+        swing.addEntry(eb.startDoubleField(Component.literal("Wall stickiness"), MovementConfig.wallStickiness)
             .setDefaultValue(pD("wallStickiness")).setMin(0.0).setMax(1.0)
             .setTooltip(Component.literal("How hard hands cling to walls while gripping. 1.0 = hang forever, 0.5 = slowly slide down, 0.0 = no clinging (gravity pulls you off)."))
             .setSaveConsumer(v -> MovementConfig.wallStickiness = v).build());
 
-        movement.addEntry(eb.startDoubleField(Component.literal("Floor stickiness"), MovementConfig.floorStickiness)
+        swing.addEntry(eb.startDoubleField(Component.literal("Floor stickiness"), MovementConfig.floorStickiness)
             .setDefaultValue(pD("floorStickiness")).setMin(0.0).setMax(1.0)
             .setTooltip(Component.literal("How much you slide across the floor while a hand is planted. 1.0 = stop dead (sticks to spot), 0.5 = some glide, 0.0 = ice-like (slides forever)."))
             .setSaveConsumer(v -> MovementConfig.floorStickiness = v).build());
 
-        movement.addEntry(eb.startDoubleField(Component.literal("Jitter filter (minImpulse)"), MovementConfig.minImpulse)
+        swing.addEntry(eb.startDoubleField(Component.literal("Jitter filter (minImpulse)"), MovementConfig.minImpulse)
             .setDefaultValue(pD("minImpulse")).setMin(0.0).setMax(0.1)
             .setTooltip(Component.literal("Movements smaller than this are ignored so a resting hand stays still."))
             .setSaveConsumer(v -> MovementConfig.minImpulse = v).build());
 
-        // ====================================================================
-        // REACH & BODY
-        // ====================================================================
-        ConfigCategory body = builder.getOrCreateCategory(Component.literal("Reach & Body"));
-
-        body.addEntry(eb.startDoubleField(Component.literal("Gorilla arm length"), MovementConfig.handReachMultiplier)
+        swing.addEntry(eb.startDoubleField(Component.literal("Gorilla arm length"), MovementConfig.handReachMultiplier)
             .setDefaultValue(pD("handReachMultiplier")).setMin(1.0).setMax(6.0)
-            .setTooltip(Component.literal("Longer arms = reach the ground with less real-arm reach. 2.5 default, raise to 3.0+"))
+            .setTooltip(Component.literal("Longer arms = reach the ground with less real-arm reach. 1.0 = your real reach (default)"))
             .setSaveConsumer(v -> MovementConfig.handReachMultiplier = v).build());
 
-        body.addEntry(eb.startDoubleField(Component.literal("Max arm length (blocks)"), MovementConfig.maxArmLength)
+        swing.addEntry(eb.startDoubleField(Component.literal("Max arm length (blocks)"), MovementConfig.maxArmLength)
             .setDefaultValue(pD("maxArmLength")).setMin(1.5).setMax(8.0)
             .setTooltip(Component.literal("Hard limit on how far a hand can be from your head."))
             .setSaveConsumer(v -> MovementConfig.maxArmLength = v).build());
 
-        body.addEntry(eb.startDoubleField(Component.literal("Hand grab size"), MovementConfig.handRadius)
+        swing.addEntry(eb.startDoubleField(Component.literal("Hand grab size"), MovementConfig.handRadius)
             .setDefaultValue(pD("handRadius")).setMin(0.02).setMax(0.5)
             .setTooltip(Component.literal("Radius of the hand touch sphere. Bigger = easier to grab."))
             .setSaveConsumer(v -> MovementConfig.handRadius = v).build());
 
-        body.addEntry(eb.startDoubleField(Component.literal("Hitbox height (legs)"), MovementConfig.hitboxHeightScale)
-            .setDefaultValue(pD("hitboxHeightScale")).setMin(0.2).setMax(1.0)
-            .setTooltip(Component.literal("Shrinks your collision box height to climb onto blocks. 1.0 = normal, 0.25 = compact (default)."))
-            .setSaveConsumer(v -> MovementConfig.hitboxHeightScale = v).build());
-
-        body.addEntry(eb.startDoubleField(Component.literal("Step height"), MovementConfig.stepHeight)
-            .setDefaultValue(pD("stepHeight")).setMin(0.5).setMax(2.0)
-            .setTooltip(Component.literal("Ledge height you can step over. 0.6 = vanilla, 1.5 = 1.5 blocks (default)."))
-            .setSaveConsumer(v -> MovementConfig.stepHeight = v).build());
-
-        // ====================================================================
-        // JUMP & GRAVITY
-        // ====================================================================
-        ConfigCategory jump = builder.getOrCreateCategory(Component.literal("Jump & Gravity"));
-
-        jump.addEntry(eb.startDoubleField(Component.literal("Jump threshold"), MovementConfig.velocityLimit)
+        swing.addEntry(eb.startDoubleField(Component.literal("Jump threshold"), MovementConfig.velocityLimit)
             .setDefaultValue(pD("velocityLimit")).setMin(0.0).setMax(1.0)
             .setTooltip(Component.literal("You only launch on release if you were moving faster than this."))
             .setSaveConsumer(v -> MovementConfig.velocityLimit = v).build());
 
-        jump.addEntry(eb.startDoubleField(Component.literal("Jump power"), MovementConfig.jumpMultiplier)
+        swing.addEntry(eb.startDoubleField(Component.literal("Jump power"), MovementConfig.jumpMultiplier)
             .setDefaultValue(pD("jumpMultiplier")).setMin(0.0).setMax(5.0)
             .setTooltip(Component.literal("How much your speed is multiplied into the launch. 1.0 = release speed, 1.4 = boost."))
             .setSaveConsumer(v -> MovementConfig.jumpMultiplier = v).build());
 
-        jump.addEntry(eb.startDoubleField(Component.literal("Max launch speed"), MovementConfig.maxJumpSpeed)
+        swing.addEntry(eb.startDoubleField(Component.literal("Max launch speed"), MovementConfig.maxJumpSpeed)
             .setDefaultValue(pD("maxJumpSpeed")).setMin(0.1).setMax(5.0)
             .setTooltip(Component.literal("Hard cap on launch speed (blocks/tick). 1.0 = 20 blocks/sec."))
             .setSaveConsumer(v -> MovementConfig.maxJumpSpeed = v).build());
 
-        jump.addEntry(eb.startDoubleField(Component.literal("Jump smoothing (ticks)"), MovementConfig.velocityHistorySize)
+        swing.addEntry(eb.startDoubleField(Component.literal("Jump smoothing (ticks)"), MovementConfig.velocityHistorySize)
             .setDefaultValue(pD("velocityHistorySize")).setMin(1.0).setMax(20.0)
             .setTooltip(Component.literal("How many ticks of movement are averaged for the launch."))
             .setSaveConsumer(v -> MovementConfig.velocityHistorySize = v).build());
 
-        jump.addEntry(eb.startDoubleField(Component.literal("Gravity"), MovementConfig.gravityMultiplier)
+        swing.addEntry(eb.startDoubleField(Component.literal("Gravity"), MovementConfig.gravityMultiplier)
             .setDefaultValue(pD("gravityMultiplier")).setMin(0.0).setMax(1.0)
             .setTooltip(
                 Component.literal("Scales gravity while airborne and NOT gripping."),
@@ -286,6 +276,99 @@ public final class VmcConfigScreen {
                 Component.literal("Can also be changed in-game with /vmc gravity <0-1> (op required).")
             )
             .setSaveConsumer(v -> MovementConfig.gravityMultiplier = v).build());
+
+
+        // ====================================================================
+        // GORILLA TAG — locomotion mode 1, the Player.cs clone (GtCloneLocomotion).
+        // Everything is in Gorilla Tag's own units: 1 block = 1 metre, speeds in m/s.
+        // ====================================================================
+        ConfigCategory gtPage = builder.getOrCreateCategory(Component.literal("Gorilla Tag"));
+
+        gtPage.addEntry(modes.toggle(eb, GorillaLocomotionHandler.MODE_GT_ANCHOR, "Gorilla Tag physics",
+                Component.literal("A clone of Gorilla Tag's own Player.cs: hands stick where they touch,"),
+                Component.literal("the body moves 1:1, real 9.81 gravity, GT's throw. The default."),
+                Component.literal("Turning this ON turns Speed Swing (and Charge Jump) OFF.")));
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Jump multiplier"), MovementConfig.gtJumpMultiplier)
+                .setDefaultValue(pD("gtJumpMultiplier")).setMin(0.0).setMax(10.0)
+                .setTooltip(Component.literal("Throw = average body speed × this. Gorilla Tag: 1.1"))
+                .setSaveConsumer(v -> MovementConfig.gtJumpMultiplier = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Max jump speed (m/s)"), MovementConfig.gtMaxJumpSpeed)
+                .setDefaultValue(pD("gtMaxJumpSpeed")).setMin(0.0).setMax(60.0)
+                .setTooltip(Component.literal("Throw speed cap. Gorilla Tag: 6.5"))
+                .setSaveConsumer(v -> MovementConfig.gtMaxJumpSpeed = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Velocity limit (m/s)"), MovementConfig.gtVelocityLimit)
+                .setDefaultValue(pD("gtVelocityLimit")).setMin(0.0).setMax(10.0)
+                .setTooltip(Component.literal("Moving slower than this never throws you. Gorilla Tag: 0.3"))
+                .setSaveConsumer(v -> MovementConfig.gtVelocityLimit = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Velocity history (ticks)"), MovementConfig.gtVelocityHistory)
+                .setDefaultValue(pD("gtVelocityHistory")).setMin(1).setMax(20)
+                .setTooltip(Component.literal("Ticks averaged for the throw. 2 ≈ Gorilla Tag's 3 frames."))
+                .setSaveConsumer(v -> MovementConfig.gtVelocityHistory = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Arm length (m)"), MovementConfig.gtArmLength)
+                .setDefaultValue(pD("gtArmLength")).setMin(0.2).setMax(5.0)
+                .setTooltip(Component.literal("Hands are held within this distance of your head. Gorilla Tag: 1.5"))
+                .setSaveConsumer(v -> MovementConfig.gtArmLength = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Hand radius (m)"), MovementConfig.gtHandRadius)
+                .setDefaultValue(pD("gtHandRadius")).setMin(0.01).setMax(0.5)
+                .setTooltip(Component.literal("Size of each hand's collision sphere. Gorilla Tag: 0.05"))
+                .setSaveConsumer(v -> MovementConfig.gtHandRadius = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Gravity (m/s²)"), MovementConfig.gtGravity)
+                .setDefaultValue(pD("gtGravity")).setMin(0.0).setMax(40.0)
+                .setTooltip(Component.literal("Gorilla Tag uses real gravity, 9.81 (Minecraft's is ~32)."))
+                .setSaveConsumer(v -> MovementConfig.gtGravity = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Ground friction"), MovementConfig.gtGroundFriction)
+                .setDefaultValue(pD("gtGroundFriction")).setMin(0.0).setMax(1.0)
+                .setTooltip(Component.literal("Speed kept per tick while standing. 1 = no friction, 0 = instant stop."))
+                .setSaveConsumer(v -> MovementConfig.gtGroundFriction = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Unstick distance (m)"), MovementConfig.gtUnstickDistance)
+                .setDefaultValue(pD("gtUnstickDistance")).setMin(0.2).setMax(3.0)
+                .setTooltip(Component.literal("A stuck hand lets go once it is this far from where it touched. Gorilla Tag: 1.0"))
+                .setSaveConsumer(v -> MovementConfig.gtUnstickDistance = v).build());
+
+        gtPage.addEntry(eb.startDoubleField(Component.literal("Ice slip"), MovementConfig.gtIceSlip)
+                .setDefaultValue(pD("gtIceSlip")).setMin(0.0).setMax(1.0)
+                .setTooltip(Component.literal("How much a hand slides along ice. 0 = grips like stone, 1 = frictionless."))
+                .setSaveConsumer(v -> MovementConfig.gtIceSlip = v).build());
+
+        gtPage.addEntry(eb.startBooleanToggle(Component.literal("Climb on mobs"), MovementConfig.gtEntityColliders)
+                .setDefaultValue(pB("gtEntityColliders"))
+                .setTooltip(Component.literal("Hands grab and you can stand on mobs and players (their hitbox). You move with them when they walk."))
+                .setSaveConsumer(v -> MovementConfig.gtEntityColliders = v).build());
+
+        gtPage.addEntry(eb.startBooleanToggle(Component.literal("Turn with mobs"), MovementConfig.gtEntityTurnWithMob)
+                .setDefaultValue(pB("gtEntityTurnWithMob"))
+                .setTooltip(Component.literal("While standing on a mob, your view turns when it turns (like riding a horse)."))
+                .setSaveConsumer(v -> MovementConfig.gtEntityTurnWithMob = v).build());
+
+        // ====================================================================
+        // BODY — applies in every locomotion mode
+        // ====================================================================
+        ConfigCategory body = builder.getOrCreateCategory(Component.literal("Body"));
+
+        body.addEntry(eb.startBooleanToggle(Component.literal("Step assist"), MovementConfig.stepAssist)
+                .setDefaultValue(pB("stepAssist"))
+                .setTooltip(Component.literal("Raise step height so legs stop snagging on block edges."))
+                .setSaveConsumer(v -> MovementConfig.stepAssist = v).build());
+
+        body.addEntry(eb.startDoubleField(Component.literal("Hitbox height (legs)"), MovementConfig.hitboxHeightScale)
+            .setDefaultValue(pD("hitboxHeightScale")).setMin(0.2).setMax(1.0)
+            .setTooltip(Component.literal("Shrinks your collision box height to climb onto blocks. 1.0 = normal, 0.25 = compact (default)."))
+            .setSaveConsumer(v -> MovementConfig.hitboxHeightScale = v).build());
+
+        body.addEntry(eb.startDoubleField(Component.literal("Step height"), MovementConfig.stepHeight)
+            .setDefaultValue(pD("stepHeight")).setMin(0.5).setMax(2.0)
+            .setTooltip(Component.literal("Ledge height you can step over. 0.6 = vanilla, 1.0 = one block (default)."))
+            .setSaveConsumer(v -> MovementConfig.stepHeight = v).build());
+
 
         // ====================================================================
         // VISUAL
@@ -403,86 +486,22 @@ public final class VmcConfigScreen {
                         Component.literal("deals the same hot-floor damage. Fire resistance negates it."))
                 .setSaveConsumer(v -> MovementConfig.magmaTouchDamage = v).build());
 
-        // ====================================================================
-        // GORILLA TAG — the locomotion-mode picker and the tuning of mode 1, the
-        // Player.cs clone (GtCloneLocomotion). Everything is in Gorilla Tag's own
-        // units: 1 block = 1 metre, speeds in m/s.
-        // ====================================================================
-        ConfigCategory gtPage = builder.getOrCreateCategory(Component.literal("Gorilla Tag"));
-
-        gtPage.addEntry(eb.startIntSlider(Component.literal("Locomotion mode"),
-                        (int) MovementConfig.locomotionMode, 0, GorillaLocomotionHandler.MODE_COUNT - 1)
-                .setDefaultValue((int) pD("locomotionMode"))
-                .setTextGetter(v -> Component.literal(GorillaLocomotionHandler.modeName(v)))
-                .setTooltip(
-                        Component.literal("Speed Swing = the classic ViveMonkeCraft movement."),
-                        Component.literal("Gorilla Tag = a clone of Gorilla Tag's own Player.cs: hands stick"),
-                        Component.literal("where they touch, the body moves 1:1, real 9.81 gravity, GT's throw."),
-                        Component.literal("Charge Jump = hold a hand on a surface to charge a launch."))
-                .setSaveConsumer(v -> MovementConfig.locomotionMode = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Jump multiplier"), MovementConfig.gtJumpMultiplier)
-                .setDefaultValue(pD("gtJumpMultiplier")).setMin(0.0).setMax(10.0)
-                .setTooltip(Component.literal("Throw = average body speed × this. Gorilla Tag: 1.1"))
-                .setSaveConsumer(v -> MovementConfig.gtJumpMultiplier = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Max jump speed (m/s)"), MovementConfig.gtMaxJumpSpeed)
-                .setDefaultValue(pD("gtMaxJumpSpeed")).setMin(0.0).setMax(60.0)
-                .setTooltip(Component.literal("Throw speed cap. Gorilla Tag: 6.5"))
-                .setSaveConsumer(v -> MovementConfig.gtMaxJumpSpeed = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Velocity limit (m/s)"), MovementConfig.gtVelocityLimit)
-                .setDefaultValue(pD("gtVelocityLimit")).setMin(0.0).setMax(10.0)
-                .setTooltip(Component.literal("Moving slower than this never throws you. Gorilla Tag: 0.3"))
-                .setSaveConsumer(v -> MovementConfig.gtVelocityLimit = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Velocity history (ticks)"), MovementConfig.gtVelocityHistory)
-                .setDefaultValue(pD("gtVelocityHistory")).setMin(1).setMax(20)
-                .setTooltip(Component.literal("Ticks averaged for the throw. 2 ≈ Gorilla Tag's 3 frames."))
-                .setSaveConsumer(v -> MovementConfig.gtVelocityHistory = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Arm length (m)"), MovementConfig.gtArmLength)
-                .setDefaultValue(pD("gtArmLength")).setMin(0.2).setMax(5.0)
-                .setTooltip(Component.literal("Hands are held within this distance of your head. Gorilla Tag: 1.5"))
-                .setSaveConsumer(v -> MovementConfig.gtArmLength = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Hand radius (m)"), MovementConfig.gtHandRadius)
-                .setDefaultValue(pD("gtHandRadius")).setMin(0.01).setMax(0.5)
-                .setTooltip(Component.literal("Size of each hand's collision sphere. Gorilla Tag: 0.05"))
-                .setSaveConsumer(v -> MovementConfig.gtHandRadius = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Gravity (m/s²)"), MovementConfig.gtGravity)
-                .setDefaultValue(pD("gtGravity")).setMin(0.0).setMax(40.0)
-                .setTooltip(Component.literal("Gorilla Tag uses real gravity, 9.81 (Minecraft's is ~32)."))
-                .setSaveConsumer(v -> MovementConfig.gtGravity = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Ground friction"), MovementConfig.gtGroundFriction)
-                .setDefaultValue(pD("gtGroundFriction")).setMin(0.0).setMax(1.0)
-                .setTooltip(Component.literal("Speed kept per tick while standing. 1 = no friction, 0 = instant stop."))
-                .setSaveConsumer(v -> MovementConfig.gtGroundFriction = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Unstick distance (m)"), MovementConfig.gtUnstickDistance)
-                .setDefaultValue(pD("gtUnstickDistance")).setMin(0.2).setMax(3.0)
-                .setTooltip(Component.literal("A stuck hand lets go once it is this far from where it touched. Gorilla Tag: 1.0"))
-                .setSaveConsumer(v -> MovementConfig.gtUnstickDistance = v).build());
-
-        gtPage.addEntry(eb.startDoubleField(Component.literal("Ice slip"), MovementConfig.gtIceSlip)
-                .setDefaultValue(pD("gtIceSlip")).setMin(0.0).setMax(1.0)
-                .setTooltip(Component.literal("How much a hand slides along ice. 0 = grips like stone, 1 = frictionless."))
-                .setSaveConsumer(v -> MovementConfig.gtIceSlip = v).build());
-
-        gtPage.addEntry(eb.startBooleanToggle(Component.literal("Climb on mobs"), MovementConfig.gtEntityColliders)
-                .setDefaultValue(pB("gtEntityColliders"))
-                .setTooltip(Component.literal("Hands grab and you can stand on mobs and players (their hitbox). You move with them when they walk."))
-                .setSaveConsumer(v -> MovementConfig.gtEntityColliders = v).build());
-
-        gtPage.addEntry(eb.startBooleanToggle(Component.literal("Turn with mobs"), MovementConfig.gtEntityTurnWithMob)
-                .setDefaultValue(pB("gtEntityTurnWithMob"))
-                .setTooltip(Component.literal("While standing on a mob, your view turns when it turns (like riding a horse)."))
-                .setSaveConsumer(v -> MovementConfig.gtEntityTurnWithMob = v).build());
-
         //Experimental page For Experimental stuff
         ConfigCategory Experimental = builder.getOrCreateCategory(Component.literal("Experimental"));
+
+        Experimental.addEntry(modes.toggle(eb, GorillaLocomotionHandler.MODE_CHARGE_JUMP, "Charge Jump movement (experimental)",
+                Component.literal("Hold a hand on a surface to charge, let go to launch away from it."),
+                Component.literal("Turning this ON turns Speed Swing and Gorilla Tag OFF.")));
+
+        Experimental.addEntry(eb.startDoubleField(Component.literal("Charge Jump: tap launch"), MovementConfig.chargeMinLaunch)
+                .setDefaultValue(pD("chargeMinLaunch")).setMin(0.0).setMax(3.0)
+                .setTooltip(Component.literal("Launch speed (blocks/tick) for a quick tap."))
+                .setSaveConsumer(v -> MovementConfig.chargeMinLaunch = v).build());
+
+        Experimental.addEntry(eb.startDoubleField(Component.literal("Charge Jump: full-charge launch"), MovementConfig.chargeMaxLaunch)
+                .setDefaultValue(pD("chargeMaxLaunch")).setMin(0.0).setMax(3.0)
+                .setTooltip(Component.literal("Launch speed (blocks/tick) after a full ~1.5 s hold."))
+                .setSaveConsumer(v -> MovementConfig.chargeMaxLaunch = v).build());
 
         Experimental.addEntry(eb.startBooleanToggle(Component.literal("Allow Vivecraft teleport"), MovementConfig.allowTeleport)
                 .setDefaultValue(pB("allowTeleport"))
@@ -661,4 +680,88 @@ public final class VmcConfigScreen {
         return builder.build();
     }
 
+
+    // -----------------------------------------------------------------------
+    // Locomotion mode switch
+    // -----------------------------------------------------------------------
+    //
+    // Speed Swing, Gorilla Tag and Charge Jump are separate on/off toggles on
+    // their own pages, but only one mode can run. Cloth has no API for one entry
+    // to change another, so:
+    //   * LIVE: each toggle's yes/no label is re-read every frame it is drawn. When
+    //     it shows a toggle has just been switched ON, the other toggles are set OFF
+    //     (through BooleanListEntry's private 'bool', the same field in every Cloth
+    //     version we build against). Switching the active mode OFF with nothing else
+    //     on falls back to Gorilla Tag (or Speed Swing, if Gorilla Tag was the one
+    //     switched off), so exactly one is always on.
+    //   * ON SAVE: resolve() applies the same rule from the saved values, so the
+    //     result is right even if the live link ever stops working.
+    private static final class ModeSwitch {
+
+        private final BooleanListEntry[] entries = new BooleanListEntry[GorillaLocomotionHandler.MODE_COUNT];
+        private final boolean[] shown = new boolean[GorillaLocomotionHandler.MODE_COUNT];
+        private final boolean[] saved = new boolean[GorillaLocomotionHandler.MODE_COUNT];
+        private final int initial = (int) MovementConfig.locomotionMode;
+        private final int presetMode;   // the active preset's mode: what the reset arrows restore
+        private static java.lang.reflect.Field boolField;
+        private static boolean broken = false;
+
+        ModeSwitch(int presetMode) {
+            this.presetMode = presetMode;
+            for (int m = 0; m < shown.length; m++) shown[m] = (m == initial);
+        }
+
+        BooleanListEntry toggle(ConfigEntryBuilder eb, int mode, String label, Component... tooltip) {
+            BooleanListEntry e = eb.startBooleanToggle(Component.literal(label), mode == initial)
+                    .setDefaultValue(mode == presetMode)
+                    .setTooltip(tooltip)
+                    .setYesNoTextSupplier(on -> label(mode, on))
+                    .setSaveConsumer(on -> saved[mode] = on)
+                    .build();
+            entries[mode] = e;
+            return e;
+        }
+
+        private Component label(int mode, boolean on) {
+            if (on != shown[mode]) {
+                shown[mode] = on;
+                if (on) {
+                    for (int m = 0; m < entries.length; m++) if (m != mode) set(m, false);
+                } else if (noneOn()) {
+                    set(mode == GorillaLocomotionHandler.MODE_GT_ANCHOR
+                            ? GorillaLocomotionHandler.MODE_SPEED_SWING
+                            : GorillaLocomotionHandler.MODE_GT_ANCHOR, true);
+                }
+            }
+            return Component.translatable("text.cloth-config.boolean.value." + on);
+        }
+
+        private boolean noneOn() {
+            for (boolean b : shown) if (b) return false;
+            return true;
+        }
+
+        private void set(int mode, boolean on) {
+            shown[mode] = on;
+            if (broken || entries[mode] == null) return;
+            try {
+                if (boolField == null) {
+                    boolField = BooleanListEntry.class.getDeclaredField("bool");
+                    boolField.setAccessible(true);
+                }
+                ((java.util.concurrent.atomic.AtomicBoolean) boolField.get(entries[mode])).set(on);
+            } catch (ReflectiveOperationException | RuntimeException ex) {
+                broken = true;   // resolve() still sorts it out on Save
+            }
+        }
+
+        /** The mode to save: the one switched on, preferring a newly switched-on one. */
+        int resolve() {
+            for (int m = 0; m < saved.length; m++) if (saved[m] && m != initial) return m;
+            if (initial >= 0 && initial < saved.length && saved[initial]) return initial;
+            return initial == GorillaLocomotionHandler.MODE_GT_ANCHOR
+                    ? GorillaLocomotionHandler.MODE_SPEED_SWING
+                    : GorillaLocomotionHandler.MODE_GT_ANCHOR;
+        }
+    }
 }
