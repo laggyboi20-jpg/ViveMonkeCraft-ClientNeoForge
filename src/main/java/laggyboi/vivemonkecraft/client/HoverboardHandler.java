@@ -36,7 +36,8 @@ import net.minecraft.world.phys.Vec3;
 //           your feet hoverHeight above it (max 0.5 on servers so they don't
 //           see "flying"; up to 4 in singleplayer or with op). Ground slightly AHEAD is probed too, so you rise over
 //           1-block steps instead of hitting them (step-up doesn't run airborne).
-//   WALL  — the board's underside faces a wall close to the board. It pushes
+//   WALL  — the board's underside faces a wall close to the board (tipped past
+//           60°; a level board only finds ledges, which count as FLOOR). It pushes
 //           you away from the wall until the board is hoverHeight off it. At
 //           hoverWallRideSpeed or faster you RIDE the wall instead: held at that
 //           distance with gravity cancelled down to a gentle slide. Below the
@@ -223,7 +224,12 @@ public final class HoverboardHandler {
             if (h != null && d < best) { best = d; hit = h; from = m; }
         }
         boolean level = boardUp.y >= FLOOR_MIN_UP;
-        if (hit == null || hit.getDirection() != Direction.UP) {
+        // A level board's field points down: if its slanted rays clip the side of
+        // a block, that's the ledge you just went over (the board is tipped for
+        // thrust, so the underside faces back at it), not a wall to ride or push
+        // off — treating it as one ate your forward speed and shoved you back.
+        boolean ledge = hit != null && level && hit.getDirection().getAxis().isHorizontal();
+        if (hit == null || (hit.getDirection() != Direction.UP && !ledge)) {
             // Lost the ground for a moment while hovering: hold on briefly.
             if (floorGrace > 0 && level && probeFloor(mc, p)) {
                 floorGrace--;
@@ -239,7 +245,7 @@ public final class HoverboardHandler {
         }
 
         Direction face = hit.getDirection();
-        if (face == Direction.UP) {
+        if (face == Direction.UP || ledge) {
             if (level && underBody(p, from) && probeFloor(mc, p)) {
                 surface    = Surface.FLOOR;
                 floorGrace = FLOOR_GRACE;
@@ -256,8 +262,8 @@ public final class HoverboardHandler {
                 wallRide = cur.length() >= minSpeed;
             }
         }
-        logBoard(p, face + (best < 0 ? " BURIED " : " ") + "hit at " + fmt(hit.getLocation())
-                + (face == Direction.UP ? " under=" + underBody(p, from) : ""), from);
+        logBoard(p, face + (best < 0 ? " BURIED " : " ") + (ledge ? "ledge " : "") + "hit at " + fmt(hit.getLocation())
+                + (face == Direction.UP || ledge ? " under=" + underBody(p, from) : ""), from);
         return hand;
     }
 
