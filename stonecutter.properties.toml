@@ -3,8 +3,8 @@
 
 mod.id = "vivemonkecraft"
 mod.version = "1.1.0.1"
-# Release channel, appended to every jar version (Beta or Release).
-mod.channel = "Beta"
+# Release channel, appended to every jar version (Alpha, Beta or Release).
+mod.channel = "Alpha"
 mod.archive = "ViveMonkeCraft-NeoForge"
 
 # Cloth Config (NeoForge flavour): every 1.21.x build compiles against the
