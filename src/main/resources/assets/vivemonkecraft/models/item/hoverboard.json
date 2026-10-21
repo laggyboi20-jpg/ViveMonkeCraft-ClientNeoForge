@@ -56,36 +56,36 @@
     },
     "thirdperson_righthand": {
       "rotation": [
-        -90,
-        180,
+        45,
+        0,
         0
       ],
       "translation": [
-        0.0,
-        -9.65,
-        3.1
+        0.51,
+        -8.73,
+        1.96
       ],
       "scale": [
-        2.0,
-        2.0,
-        2.0
+        1.49,
+        1.49,
+        1.49
       ]
     },
     "thirdperson_lefthand": {
       "rotation": [
-        -90,
-        180,
+        45,
+        0,
         0
       ],
       "translation": [
-        0.0,
-        -9.65,
-        3.1
+        -0.51,
+        -8.73,
+        1.96
       ],
       "scale": [
-        2.0,
-        2.0,
-        2.0
+        1.49,
+        1.49,
+        1.49
       ]
     },
     "firstperson_righthand": {
