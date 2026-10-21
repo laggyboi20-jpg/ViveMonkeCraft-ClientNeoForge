@@ -5,7 +5,7 @@ plugins {
 }
 
 val mcVersion = sc.current.version
-version = "${property("mod.version")}-$mcVersion-Release"
+version = "${property("mod.version")}-$mcVersion-${property("mod.channel")}"
 group = "laggyboi"
 base.archivesName = property("mod.archive") as String
 

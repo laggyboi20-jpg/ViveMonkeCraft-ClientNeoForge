@@ -2,7 +2,9 @@
 # Values in a [version] table override the top-level ones for that version.
 
 mod.id = "vivemonkecraft"
-mod.version = "1.1.0.0"
+mod.version = "1.1.0.1"
+# Release channel, appended to every jar version (Beta or Release).
+mod.channel = "Beta"
 mod.archive = "ViveMonkeCraft-NeoForge"
 
 # Cloth Config (NeoForge flavour): every 1.21.x build compiles against the
