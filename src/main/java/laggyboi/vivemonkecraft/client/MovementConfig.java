@@ -24,9 +24,13 @@ import java.util.Properties;
 
 public final class MovementConfig {
 
-    // Bumped when defaults change in a way that should override old config files.
-    // An older saved version resets to the new defaults once.
-    private static final int CURRENT_CONFIG_VERSION = 17;
+    // Version stamp written to the file. Files older than RESET_BELOW_VERSION are
+    // reset to the Default preset once; newer-but-outdated files only get the
+    // one-off migrations in load() (their other settings are kept).
+    private static final int CURRENT_CONFIG_VERSION = 18;
+    private static final int RESET_BELOW_VERSION    = 17;
+    // v18: Gorilla Tag became the default locomotion mode — older files switch once.
+    private static final int GT_DEFAULT_VERSION     = 18;
 
     // -----------------------------------------------------------------------
     // The tunable values (DEFAULTS until the file is loaded)
@@ -152,8 +156,8 @@ public final class MovementConfig {
     public static double gripSmoothing = 0.5;
 
     // LOCOMOTION MODE — index into GorillaLocomotionHandler's mode registry.
-    //   0 = Speed Swing, 1 = Gorilla Tag (Player.cs clone), 2 = Charge Jump
-    public static double locomotionMode = 0;
+    //   0 = Speed Swing, 1 = Gorilla Tag (Player.cs clone, the default), 2 = Charge Jump
+    public static double locomotionMode = 1;
 
     // CHARGE JUMP (mode 2) — launch speed (blocks/tick) for a bare tap vs full hold.
     public static double chargeMinLaunch = 0.45;
@@ -396,6 +400,7 @@ public final class MovementConfig {
                 monkeModel          = true;
                 realMonke           = true;
                 modelTorsoPitch     = -120.0;
+                locomotionMode      = 0;   // these values tune Speed Swing
                 break;
             case "Long Arms":
                 pullStrength        = 2.5;
@@ -414,6 +419,7 @@ public final class MovementConfig {
                 monkeModel          = true;
                 realMonke           = true;
                 modelTorsoPitch     = -120.0;
+                locomotionMode      = 0;   // these values tune Speed Swing
                 break;
             case "Zero Gravity":
                 gravityMultiplier   = 0.1;
@@ -427,6 +433,7 @@ public final class MovementConfig {
                 monkeModel          = true;
                 realMonke           = true;
                 modelTorsoPitch     = -120.0;
+                locomotionMode      = 0;   // these values tune Speed Swing
                 break;
             case "Speed Run":
                 pullStrength        = 5.0;
@@ -441,6 +448,7 @@ public final class MovementConfig {
                 monkeModel          = true;
                 realMonke           = true;
                 modelTorsoPitch     = -120.0;
+                locomotionMode      = 0;   // these values tune Speed Swing
                 break;
             default:
                 break;
@@ -525,7 +533,7 @@ public final class MovementConfig {
         monkeModel          = true;
         realMonke           = true;
         modelTorsoPitch     = -120.0;
-        locomotionMode      = 0;
+        locomotionMode      = 1;   // Gorilla Tag
         chargeMinLaunch     = 0.45;
         chargeMaxLaunch     = 1.10;
         punchMining         = true;
@@ -619,7 +627,7 @@ public final class MovementConfig {
                 // Old file version? Ignore its values and apply the curated Default
                 // preset (then re-save below), so improved defaults actually take effect.
                 int savedVersion = (int) parseD(p, "configVersion", 0);
-                if (savedVersion < CURRENT_CONFIG_VERSION) {
+                if (savedVersion < RESET_BELOW_VERSION) {
                     System.out.println("[ViveMonkeCraft] Config is old (v" + savedVersion
                         + "); resetting to v" + CURRENT_CONFIG_VERSION + " defaults.");
                     applyDefaultPreset();
@@ -648,6 +656,11 @@ public final class MovementConfig {
                         locomotionMode = parseB(p, "gtPhysics", false) ? 1 : 0;
                     } else {
                         locomotionMode = parseD(p, "locomotionMode", locomotionMode);
+                    }
+                    if (savedVersion < GT_DEFAULT_VERSION) {
+                        // One-off: Gorilla Tag is the default now. Saved as v18 below,
+                        // so switching back to another mode afterwards sticks.
+                        locomotionMode = 1;
                     }
                     chargeMinLaunch     = parseD(p, "chargeMinLaunch",     chargeMinLaunch);
                     chargeMaxLaunch     = parseD(p, "chargeMaxLaunch",     chargeMaxLaunch);
@@ -823,7 +836,7 @@ public final class MovementConfig {
             sb.append("# The throw/launch on release is unaffected (uses raw velocity).\n");
             sb.append("gripSmoothing=").append(gripSmoothing).append("\n\n");
 
-            sb.append("# LOCOMOTION MODE: 0=Speed Swing, 1=Gorilla Tag clone, 2=Charge Jump\n");
+            sb.append("# LOCOMOTION MODE: 0=Speed Swing, 1=Gorilla Tag clone (default), 2=Charge Jump\n");
             sb.append("locomotionMode=").append(locomotionMode).append("\n\n");
 
             sb.append("# CHARGE JUMP (mode 2): launch speed for a tap vs full ~1.5s hold\n");
